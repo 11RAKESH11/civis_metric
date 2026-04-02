@@ -12,51 +12,47 @@ const foundationTypes = [
   { value: 'stone', label: 'Stone Foundation' },
 ];
 
+// Authentic Real-World Material Colors
+const COLORS = {
+    DRY_CONCRETE: 0x9ca3af,
+    WET_CONCRETE: 0x4b5563,
+    PCC_BLINDING: 0x78716c,
+    SOIL_PIT: 0x713f12,
+    BLUEPRINT_STRUCT: 0x0ea5e9,
+    BLUEPRINT_PCC: 0x3b82f6,
+    BLUEPRINT_PIT: 0xf59e0b
+};
+
 export default function FoundationCalculator() {
   // --- Core Inputs ---
   const [unitSystem, setUnitSystem] = useState('ft');
   const [inputs, setInputs] = useState({
-    // Base Geometry
-    length: 20, 
-    width: 15, 
-    thickness: 6, 
-    // Site & Sub-base
-    excavationDepth: 3, 
-    overdig: 2, 
-    pccThickness: 4, 
-    // Structural Details
-    stemHeight: 24, 
-    footingWidth: 24,
-    footingDepth: 12,
-    // Wastage
-    concreteWastage: 5,
-    rebarWastage: 5,
-    // Rates
-    concretePrice: 120,
-    pccPrice: 90, 
-    rebarPrice: 0.8,
-    formworkPrice: 15,
-    excavationRate: 25,
-    laborRate: 200,
+    length: 20, width: 15, thickness: 6, 
+    excavationDepth: 3, overdig: 2, pccThickness: 4, 
+    stemHeight: 24, footingWidth: 24, footingDepth: 12,
+    concreteWastage: 5, rebarWastage: 5,
+    concretePrice: 120, pccPrice: 90, rebarPrice: 0.8,
+    formworkPrice: 15, excavationRate: 25, laborRate: 200,
     currency: '₹'
   });
 
   const [foundationType, setFoundationType] = useState('slab');
 
-  // --- UI State ---
+  // --- UI & Anim State ---
   const [mode, setMode] = useState('normal'); 
   const [visualTheme, setVisualTheme] = useState('realistic');
   const [results, setResults] = useState(null);
-  const [visualWarning, setVisualWarning] = useState('');
-
+  
   // --- 3D Refs ---
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
   const rendererRef = useRef(null);
-  const meshRef = useRef(null);
-  const resizeObserverRef = useRef(null);
+  
+  // To track objects for animation
+  const sceneObjectsRef = useRef({ pitLines: null, pccMesh: null, foundationGroup: null });
+  const animStateRef = useRef({ active: false, startTime: 0 });
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -98,20 +94,19 @@ export default function FoundationCalculator() {
     controls.autoRotateSpeed = 0.5;
     controlsRef.current = controls;
 
-    // Lighting setup for realistic materials
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.5); // Slightly warm sunlight
+    // Realistic Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.5); 
     dirLight.position.set(15, 25, 15);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
-    const rimLight = new THREE.DirectionalLight(0xa5f3fc, 0.6); // Cool sky rim light
+    const rimLight = new THREE.DirectionalLight(0xa5f3fc, 0.7); 
     rimLight.position.set(-15, -5, -15);
     scene.add(rimLight);
 
-    // Ground Grid
     const gridHelper = new THREE.GridHelper(100, 100, 0x0ea5e9, 0x1e293b);
     gridHelper.position.y = -0.01;
     gridHelper.material.transparent = true;
@@ -119,9 +114,61 @@ export default function FoundationCalculator() {
     scene.add(gridHelper);
 
     let animationFrameId;
+    
+    // --- The Master Render & Animation Loop ---
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
       controls.update();
+
+      // Process Pouring Animation Sequence
+      if (animStateRef.current.active && sceneObjectsRef.current.foundationGroup) {
+          const { pitLines, pccMesh, foundationGroup } = sceneObjectsRef.current;
+          const elapsed = (Date.now() - animStateRef.current.startTime) / 1000;
+
+          // Timeline (Seconds):
+          // 0.0 - 0.5: Pit fades in
+          // 0.5 - 1.5: PCC Layer pours
+          // 1.5 - 3.5: Structural Foundation pours
+          // 3.5 - 5.5: Concrete Cures (Wet to Dry color)
+
+          if (elapsed < 0.5) {
+              if(pitLines) pitLines.material.opacity = (elapsed / 0.5) * (visualTheme === 'blueprint' ? 0.6 : 0.8);
+              if(pccMesh) pccMesh.scale.y = 0.001;
+              foundationGroup.scale.y = 0.001;
+          } else if (elapsed < 1.5) {
+              if(pccMesh) pccMesh.scale.y = Math.max(0.001, (elapsed - 0.5));
+              foundationGroup.scale.y = 0.001;
+          } else if (elapsed < 3.5) {
+              if(pccMesh) pccMesh.scale.y = 1;
+              foundationGroup.scale.y = Math.max(0.001, (elapsed - 1.5) / 2.0);
+              
+              // Set Wet Concrete Color during pour
+              if (foundationType !== 'stone' && visualTheme === 'realistic') {
+                  foundationGroup.children.forEach(c => {
+                      if(c.material && c.material.color) c.material.color.setHex(COLORS.WET_CONCRETE);
+                  });
+              }
+          } else if (elapsed < 5.5) {
+              foundationGroup.scale.y = 1;
+              
+              // Curing Transition
+              if (foundationType !== 'stone' && visualTheme === 'realistic') {
+                  const cureProgress = (elapsed - 3.5) / 2.0;
+                  const wet = new THREE.Color(COLORS.WET_CONCRETE);
+                  const dry = new THREE.Color(COLORS.DRY_CONCRETE);
+                  const lerped = wet.lerp(dry, cureProgress);
+                  
+                  foundationGroup.children.forEach(c => {
+                      if(c.material && c.material.color) c.material.color.copy(lerped);
+                  });
+              }
+          } else {
+              // Finished
+              foundationGroup.scale.y = 1;
+              animStateRef.current.active = false;
+          }
+      }
+
       renderer.render(scene, camera);
     };
     animate();
@@ -138,22 +185,19 @@ export default function FoundationCalculator() {
     };
 
     const resizeObserver = new ResizeObserver(() => handleResize());
-    resizeObserverRef.current = resizeObserver;
     resizeObserver.observe(container);
     window.addEventListener('resize', handleResize);
-    
     setTimeout(handleResize, 100);
 
     return () => {
-      if (resizeObserverRef.current) resizeObserverRef.current.disconnect();
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
       if (container && renderer.domElement) container.removeChild(renderer.domElement);
       renderer.dispose();
     };
-  }, []);
+  }, [visualTheme, foundationType]); 
 
-  // Recalculate dimensions immediately when switching back to 3D View
   useEffect(() => {
     if (mode === 'normal') {
       setTimeout(() => {
@@ -170,7 +214,12 @@ export default function FoundationCalculator() {
     }
   }, [mode]);
 
-  // --- Core Calculation Engine ---
+  // Trigger Pour Animation
+  const triggerSimulation = () => {
+      animStateRef.current = { active: true, startTime: Date.now() };
+  };
+
+  // --- Core Calculation & 3D Rebuild ---
   useEffect(() => {
     const handler = setTimeout(() => calculateAndRender(), 300);
     return () => clearTimeout(handler);
@@ -180,81 +229,56 @@ export default function FoundationCalculator() {
     const { length, width, thickness, excavationDepth, overdig, pccThickness, stemHeight, footingWidth, footingDepth, concreteWastage, rebarWastage, concretePrice, pccPrice, rebarPrice, formworkPrice, excavationRate, laborRate } = inputs;
     const scene = sceneRef.current;
 
-    if (!length || !width || !scene) {
-      if (meshRef.current) {
-        scene?.remove(meshRef.current);
-        meshRef.current = null;
-      }
-      return;
-    }
+    if (!length || !width || !scene) return;
 
-    // Convert everything to Meters for standard math
+    // Convert to Meters
     const lenM = length * unitToMeter[unitSystem];
     const widM = width * unitToMeter[unitSystem];
     const thickM = thickness * unitToMeter[unitSystem === 'ft' ? 'in' : 'cm'];
-    
     const depthM = excavationDepth * unitToMeter[unitSystem];
     const overdigM = overdig * unitToMeter[unitSystem];
     const pccThickM = pccThickness * unitToMeter[unitSystem === 'ft' ? 'in' : 'cm'];
-
     const stemHtM = stemHeight * unitToMeter[unitSystem === 'ft' ? 'in' : 'cm'];
     const footWidM = footingWidth * unitToMeter[unitSystem === 'ft' ? 'in' : 'cm'];
     const footDepthM = footingDepth * unitToMeter[unitSystem === 'ft' ? 'in' : 'cm'];
 
-    // 1. Excavation & Site Prep Math
+    // 1. Excavation Math
     const excavLenM = lenM + (2 * overdigM);
     const excavWidM = widM + (2 * overdigM);
     const excavationVolM3 = excavLenM * excavWidM * depthM;
     
-    // 2. PCC (Blinding Concrete) Math
+    // 2. PCC Math
     const pccVolM3 = excavLenM * excavWidM * pccThickM;
 
     // 3. Structural Math
-    let exactVolumeM3 = 0;
-    let exactRebarKg = 0;
-    let formworkAreaM2 = 0;
+    let exactVolumeM3 = 0, exactRebarKg = 0, formworkAreaM2 = 0;
 
     if (foundationType === 'slab') {
       exactVolumeM3 = lenM * widM * thickM;
       exactRebarKg = exactVolumeM3 * 0.005 * 7850; 
       formworkAreaM2 = 2 * (lenM + widM) * thickM; 
-    } else if (foundationType === 'stem') {
+    } else if (foundationType === 'stem' || foundationType === 'tshaped' || foundationType === 'frost') {
       const footingVol = lenM * footWidM * footDepthM;
       const stemVol = lenM * thickM * stemHtM; 
       exactVolumeM3 = footingVol + stemVol;
-      exactRebarKg = exactVolumeM3 * 0.006 * 7850; 
-      formworkAreaM2 = (2 * lenM * stemHtM) + (2 * lenM * footDepthM);
-    } else if (foundationType === 'tshaped') {
-      const footingVol = lenM * footWidM * footDepthM;
-      const stemVol = lenM * thickM * stemHtM;
-      exactVolumeM3 = footingVol + stemVol;
-      exactRebarKg = exactVolumeM3 * 0.007 * 7850; 
-      formworkAreaM2 = (2 * lenM * stemHtM) + (2 * lenM * footDepthM);
-    } else if (foundationType === 'frost') {
-      const footingVol = lenM * footWidM * footDepthM;
-      const wallVol = lenM * thickM * stemHtM;
-      exactVolumeM3 = footingVol + wallVol;
-      exactRebarKg = exactVolumeM3 * 0.0075 * 7850; 
+      exactRebarKg = exactVolumeM3 * (foundationType==='frost'?0.0075 : foundationType==='tshaped'?0.007 : 0.006) * 7850; 
       formworkAreaM2 = (2 * lenM * stemHtM) + (2 * lenM * footDepthM);
     } else if (foundationType === 'stone') {
       exactVolumeM3 = lenM * thickM * stemHtM;
-      exactRebarKg = 0; // Stone doesn't use rebar
-      formworkAreaM2 = 0; // Stone doesn't use standard timber formwork
+      exactRebarKg = 0; formworkAreaM2 = 0; 
     }
 
     if (exactVolumeM3 <= 0) return;
 
-    // Apply Wastage Buffers
+    // Financials
     const orderVolumeM3 = exactVolumeM3 * (1 + (concreteWastage / 100));
     const orderPccM3 = pccVolM3 * (1 + (concreteWastage / 100));
     const orderRebarKg = exactRebarKg * (1 + (rebarWastage / 100));
 
-    // Volume Units (for UI display)
     const orderVolumeYd3 = orderVolumeM3 * 1.30795;
     const orderPccYd3 = orderPccM3 * 1.30795;
     const excavationYd3 = excavationVolM3 * 1.30795;
 
-    // Financials
     const billableConcrete = unitSystem === 'ft' ? orderVolumeYd3 : orderVolumeM3;
     const billablePcc = unitSystem === 'ft' ? orderPccYd3 : orderPccM3;
     const billableExcavation = unitSystem === 'ft' ? excavationYd3 : excavationVolM3;
@@ -265,49 +289,29 @@ export default function FoundationCalculator() {
     const costRebar = orderRebarKg * rebarPrice;
     const costFormwork = formworkAreaM2 * formworkPrice;
     
-    // Est labor: 0.8 hours per cubic meter
     const laborHours = (orderVolumeM3 + orderPccM3) * 0.8;
     const costLabor = laborHours * laborRate;
-    
     const grandTotal = costExcavation + costPcc + costConcrete + costRebar + costFormwork + costLabor;
 
     // --- 3D Scene Assembly ---
-    if (meshRef.current) {
-      scene.remove(meshRef.current);
-      meshRef.current = null;
-    }
+    // Cleanup previous objects
+    const oldObjects = sceneObjectsRef.current;
+    if (oldObjects.pitLines) scene.remove(oldObjects.pitLines);
+    if (oldObjects.pccMesh) scene.remove(oldObjects.pccMesh);
+    if (oldObjects.foundationGroup) scene.remove(oldObjects.foundationGroup);
 
     const isBlueprint = visualTheme === 'blueprint';
-    
-    // ORIGINAL & AUTHENTIC REALISTIC COLORS
-    const concreteColor = isBlueprint ? 0x0ea5e9 : 0x8b8c89; // Authentic Poured Concrete Gray
-    const pccColor = isBlueprint ? 0x3b82f6 : 0x5a5c5a;      // Darker, rougher lean concrete
-    const pitColor = isBlueprint ? 0xf59e0b : 0x8b5a2b;      // Natural Soil/Dirt Brown
+    const structColor = isBlueprint ? COLORS.BLUEPRINT_STRUCT : (foundationType === 'stone' ? 0x78716c : COLORS.DRY_CONCRETE); 
+    const pccColor = isBlueprint ? COLORS.BLUEPRINT_PCC : COLORS.PCC_BLINDING;
+    const pitColor = isBlueprint ? COLORS.BLUEPRINT_PIT : COLORS.SOIL_PIT;
     
     const opacity = isBlueprint ? 0.3 : 1;
     const wireframe = isBlueprint;
     
-    const structMaterial = new THREE.MeshStandardMaterial({ 
-        color: concreteColor, 
-        roughness: 0.95, // Concrete is very rough
-        metalness: 0.05, 
-        transparent: isBlueprint, 
-        opacity, 
-        wireframe 
-    });
+    const structMaterial = new THREE.MeshStandardMaterial({ color: structColor, roughness: 0.95, transparent: isBlueprint, opacity, wireframe });
+    const pccMaterial = new THREE.MeshStandardMaterial({ color: pccColor, roughness: 1.0, transparent: isBlueprint, opacity: opacity * 0.9, wireframe });
     
-    const pccMaterial = new THREE.MeshStandardMaterial({ 
-        color: pccColor, 
-        roughness: 1.0, 
-        metalness: 0.0,
-        transparent: isBlueprint, 
-        opacity: opacity * 0.9, 
-        wireframe 
-    });
-    
-    const mainGroup = new THREE.Group();
-
-    // Safe Dimensions to prevent 0-scale crashes
+    // Safe Dimensions
     const safeLen = Math.max(0.1, lenM);
     const safeWid = Math.max(0.1, widM);
     const safeThick = Math.max(0.01, thickM);
@@ -319,42 +323,44 @@ export default function FoundationCalculator() {
     const safeExcavWid = Math.max(0.1, excavWidM);
     const safeDepth = Math.max(0.1, depthM);
 
-    // 1. Excavation Pit (Wireframe bounds)
+    // 1. Excavation Pit (Wireframe)
     const pitGeo = new THREE.BoxGeometry(safeExcavLen, safeDepth, safeExcavWid);
+    // Crucial: Pivot at bottom for animation
+    pitGeo.translate(0, safeDepth / 2, 0);
     const pitEdges = new THREE.EdgesGeometry(pitGeo);
-    const pitMaterial = new THREE.LineBasicMaterial({ color: pitColor, transparent: true, opacity: isBlueprint ? 0.6 : 0.4 });
+    const pitMaterial = new THREE.LineBasicMaterial({ color: pitColor, transparent: true, opacity: isBlueprint ? 0.6 : 0.8 });
     const pitLines = new THREE.LineSegments(pitEdges, pitMaterial);
-    pitLines.position.set(0, safeDepth / 2, 0);
-    mainGroup.add(pitLines);
+    pitLines.position.set(0, 0, 0);
+    scene.add(pitLines);
 
     // 2. PCC Layer
     const pccGeo = new THREE.BoxGeometry(safeExcavLen, safePccThick, safeExcavWid);
+    pccGeo.translate(0, safePccThick / 2, 0); // Pivot bottom
     const pccMesh = new THREE.Mesh(pccGeo, pccMaterial);
-    pccMesh.position.set(0, safePccThick / 2, 0); 
+    pccMesh.position.set(0, 0, 0); 
     pccMesh.receiveShadow = !isBlueprint;
-    mainGroup.add(pccMesh);
+    scene.add(pccMesh);
 
     // 3. Structural Foundation
     const foundationGroup = new THREE.Group();
-    foundationGroup.position.y = safePccThick;
+    foundationGroup.position.y = safePccThick; // Sits on top of PCC
 
     if (foundationType === 'stone' && !isBlueprint) {
-      // --- InstancedMesh for Authentic Stone Look ---
-      const stoneL = 0.4; 
-      const stoneH = 0.25; 
+      // Authentic Stone InstancedMesh
+      const stoneL = 0.4, stoneH = 0.25; 
       const rows = Math.max(1, Math.ceil(safeStemHt / stoneH));
       const cols = Math.max(1, Math.ceil(safeLen / stoneL) + 1);
       
       const stoneGeo = new THREE.BoxGeometry(stoneL * 0.95, stoneH * 0.92, safeThick * 0.95);
+      // Pivot stone geometry to its bottom to scale properly inside the group
+      stoneGeo.translate(0, (stoneH * 0.92) / 2, 0);
       const stoneMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1.0 });
       const stoneMesh = new THREE.InstancedMesh(stoneGeo, stoneMat, rows * cols);
-      stoneMesh.castShadow = true;
-      stoneMesh.receiveShadow = true;
+      stoneMesh.castShadow = true; stoneMesh.receiveShadow = true;
       
       const dummy = new THREE.Object3D();
       const color = new THREE.Color();
-      // Authentic Natural Stone/Granite Hex Codes
-      const stoneColors = ['#78716c', '#8a7f72', '#a8a29e', '#57534e', '#44403c', '#d6d3d1', '#8b7355'];
+      const stoneColors = ['#78716c', '#8a7f72', '#a8a29e', '#57534e', '#44403c', '#d6d3d1'];
       
       let count = 0;
       const startX = -safeLen / 2 + stoneL / 2;
@@ -362,12 +368,10 @@ export default function FoundationCalculator() {
       for (let r = 0; r < rows; r++) {
           const isEven = r % 2 === 0;
           let actualStoneH = stoneH;
-          let yCenter = r * stoneH + (stoneH / 2);
+          let yBase = r * stoneH; // Use bottom base for pivot
           
-          // Trim top row to match exactly the required stemHeight
           if (r * stoneH + stoneH > safeStemHt) {
               actualStoneH = safeStemHt - (r * stoneH);
-              yCenter = r * stoneH + (actualStoneH / 2);
           }
           if (actualStoneH <= 0.01) continue;
 
@@ -376,23 +380,17 @@ export default function FoundationCalculator() {
               if (!isEven) xCenter -= stoneL / 2; 
 
               let actualStoneL = stoneL;
-              
-              // Trim left edge
               if (xCenter - stoneL/2 < -safeLen/2) {
                   const overlap = (-safeLen/2) - (xCenter - stoneL/2);
-                  actualStoneL -= overlap;
-                  xCenter += overlap / 2;
+                  actualStoneL -= overlap; xCenter += overlap / 2;
               }
-              // Trim right edge
               if (xCenter + actualStoneL/2 > safeLen/2) {
                   const overlap = (xCenter + actualStoneL/2) - (safeLen/2);
-                  actualStoneL -= overlap;
-                  xCenter -= overlap / 2;
+                  actualStoneL -= overlap; xCenter -= overlap / 2;
               }
-              
               if (actualStoneL <= 0.02) continue;
 
-              dummy.position.set(xCenter, yCenter, 0);
+              dummy.position.set(xCenter, yBase, 0);
               dummy.scale.set(actualStoneL / stoneL, actualStoneH / stoneH, 1);
               dummy.updateMatrix();
               stoneMesh.setMatrixAt(count, dummy.matrix);
@@ -405,49 +403,50 @@ export default function FoundationCalculator() {
       stoneMesh.count = count;
       stoneMesh.instanceMatrix.needsUpdate = true;
       if(stoneMesh.instanceColor) stoneMesh.instanceColor.needsUpdate = true;
-      
       foundationGroup.add(stoneMesh);
 
     } else if (foundationType === 'stone' && isBlueprint) {
-      // Blueprint wireframe for stone
       const stoneGeo = new THREE.BoxGeometry(safeLen, safeStemHt, safeThick);
+      stoneGeo.translate(0, safeStemHt / 2, 0);
       const stoneMesh = new THREE.Mesh(stoneGeo, structMaterial);
-      stoneMesh.position.set(0, safeStemHt / 2, 0);
       foundationGroup.add(stoneMesh);
     } else if (foundationType === 'slab') {
-      // Monolithic Slab
       const geometry = new THREE.BoxGeometry(safeLen, safeThick, safeWid);
+      geometry.translate(0, safeThick / 2, 0);
       const slabMesh = new THREE.Mesh(geometry, structMaterial);
-      slabMesh.position.set(0, safeThick / 2, 0);
-      slabMesh.castShadow = !isBlueprint;
-      slabMesh.receiveShadow = !isBlueprint;
+      slabMesh.castShadow = !isBlueprint; slabMesh.receiveShadow = !isBlueprint;
       foundationGroup.add(slabMesh);
     } else {
-      // Monolithic Concrete Footing
+      // Footing
       const footingGeo = new THREE.BoxGeometry(safeLen, safeFootDepth, safeFootWid);
+      footingGeo.translate(0, safeFootDepth / 2, 0);
       const footingMesh = new THREE.Mesh(footingGeo, structMaterial);
-      footingMesh.position.set(0, safeFootDepth / 2, 0);
-      footingMesh.castShadow = !isBlueprint;
-      footingMesh.receiveShadow = !isBlueprint;
+      footingMesh.castShadow = !isBlueprint; footingMesh.receiveShadow = !isBlueprint;
       foundationGroup.add(footingMesh);
 
-      // Monolithic Concrete Stem Wall
+      // Stem Wall
       const stemGeo = new THREE.BoxGeometry(safeLen, safeStemHt, safeThick);
+      stemGeo.translate(0, safeStemHt / 2, 0);
       const stemMesh = new THREE.Mesh(stemGeo, structMaterial);
       
-      if (foundationType === 'tshaped') {
-          stemMesh.position.set(0, safeFootDepth + (safeStemHt / 2), 0);
-      } else {
-          stemMesh.position.set(0, safeFootDepth + (safeStemHt / 2), (safeFootWid/2) - (safeThick/2));
+      stemMesh.position.y = safeFootDepth;
+      if (foundationType !== 'tshaped') {
+          stemMesh.position.z = (safeFootWid/2) - (safeThick/2);
       }
-      stemMesh.castShadow = !isBlueprint;
-      stemMesh.receiveShadow = !isBlueprint;
+      stemMesh.castShadow = !isBlueprint; stemMesh.receiveShadow = !isBlueprint;
       foundationGroup.add(stemMesh);
     }
     
-    mainGroup.add(foundationGroup);
-    scene.add(mainGroup);
-    meshRef.current = mainGroup;
+    scene.add(foundationGroup);
+
+    // Save refs for animation
+    sceneObjectsRef.current = { pitLines, pccMesh, foundationGroup };
+
+    // Reset Animation State to fully built
+    animStateRef.current.active = false;
+    if(pitLines) pitLines.material.opacity = isBlueprint ? 0.6 : 0.8;
+    if(pccMesh) pccMesh.scale.y = 1;
+    foundationGroup.scale.y = 1;
 
     // Adjust camera
     const maxDim = Math.max(safeExcavLen, safeExcavWid, safeDepth);
@@ -469,7 +468,6 @@ export default function FoundationCalculator() {
   return (
     <div className="flex flex-col xl:flex-row gap-6 p-4 md:p-6 bg-[#020617] text-slate-100 min-h-screen relative overflow-hidden font-sans print:p-0 print:bg-white print:text-black print:overflow-visible print:min-h-0 print:block">
       
-      {/* Background Ambient Glows */}
       <div className="absolute top-[-10%] left-[-5%] w-[400px] h-[400px] bg-cyan-600/20 blur-[120px] rounded-full pointer-events-none print:hidden"></div>
       <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-indigo-600/10 blur-[150px] rounded-full pointer-events-none print:hidden"></div>
 
@@ -588,30 +586,7 @@ export default function FoundationCalculator() {
               </div>
             )}
 
-            {/* Wastage Buffers */}
-            <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-orange-500/30 transition-colors group">
-                <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2 group-hover:text-orange-400 transition-colors"><span className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></span>Wastage Buffers</h3>
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="block text-[9px] text-slate-400 mb-1 uppercase">{foundationType === 'stone' ? 'Stone/Mortar Loss' : 'Concrete Loss'}</label>
-                        <div className="flex items-center bg-slate-900/80 border border-slate-700/80 rounded-lg pr-2 focus-within:ring-1 focus-within:ring-orange-500">
-                            <input type="number" name="concreteWastage" value={inputs.concreteWastage} onChange={handleInputChange} className="w-full bg-transparent p-2 text-xs outline-none text-white" />
-                            <span className="text-slate-500 text-xs">%</span>
-                        </div>
-                    </div>
-                    {foundationType !== 'stone' && (
-                      <div>
-                          <label className="block text-[9px] text-slate-400 mb-1 uppercase">Steel/Rebar Loss</label>
-                          <div className="flex items-center bg-slate-900/80 border border-slate-700/80 rounded-lg pr-2 focus-within:ring-1 focus-within:ring-orange-500">
-                              <input type="number" name="rebarWastage" value={inputs.rebarWastage} onChange={handleInputChange} className="w-full bg-transparent p-2 text-xs outline-none text-white" />
-                              <span className="text-slate-500 text-xs">%</span>
-                          </div>
-                      </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Financial & Ops Card */}
+            {/* Rates & Operations */}
             <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-emerald-500/30 transition-colors group mb-2">
                 <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2 group-hover:text-emerald-400 transition-colors"><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>Rates & Operations</h3>
                 <div className="space-y-2">
@@ -719,8 +694,11 @@ export default function FoundationCalculator() {
         <div className={`${mode === 'normal' ? 'flex' : 'hidden'} flex-1 relative min-h-[500px] w-full overflow-hidden bg-gradient-to-b from-slate-900/50 to-[#020617] group print:hidden`}>
             <div ref={mountRef} className="absolute inset-0 cursor-move"></div>
             
-            {/* Theme Toggle */}
+            {/* Theme Toggle & Animation Trigger */}
             <div className="absolute bottom-6 right-6 z-30 bg-slate-800/80 backdrop-blur-md p-1 rounded-xl border border-slate-700/50 flex gap-1 shadow-xl">
+                <button onClick={triggerSimulation} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500 hover:text-slate-900 mr-2 flex items-center gap-1`}>
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path></svg> Simulate Pour
+                </button>
                 <button onClick={() => setVisualTheme('realistic')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${visualTheme === 'realistic' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50' : 'text-slate-500 hover:text-slate-300'}`}>Realistic</button>
                 <button onClick={() => setVisualTheme('blueprint')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${visualTheme === 'blueprint' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'text-slate-500 hover:text-slate-300'}`}>Blueprint</button>
             </div>
@@ -736,7 +714,6 @@ export default function FoundationCalculator() {
               </div>
 
               <div className="space-y-8 max-w-4xl mx-auto">
-                 {/* Step 1 */}
                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
                     <h3 className="text-lg font-bold text-amber-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 1: Excavation & Site Prep</h3>
                     <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
@@ -751,7 +728,6 @@ export default function FoundationCalculator() {
                     </div>
                  </div>
 
-                 {/* Step 2 */}
                  <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
                     <h3 className="text-lg font-bold text-cyan-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 2: Volume Matrix (PCC & Structural)</h3>
                     <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
@@ -787,7 +763,6 @@ export default function FoundationCalculator() {
                     </div>
                  </div>
 
-                 {/* Step 3 (Only if not stone) */}
                  {foundationType !== 'stone' && (
                    <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
                       <h3 className="text-lg font-bold text-orange-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 3: Steel Reinforcement (Rebar)</h3>
@@ -804,7 +779,6 @@ export default function FoundationCalculator() {
                    </div>
                  )}
 
-                 {/* Step 4 (Only if not stone) */}
                  {foundationType !== 'stone' && (
                    <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
                       <h3 className="text-lg font-bold text-indigo-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 4: Formwork (Shuttering) Area</h3>
