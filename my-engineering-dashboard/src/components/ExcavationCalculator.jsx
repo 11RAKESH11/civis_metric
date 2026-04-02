@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 const unitToMeter = { 'm': 1, 'ft': 0.3048, 'in': 0.0254, 'cm': 0.01, 'mm': 0.001 };
-const sqUnitToSqMeter = { 'm': 1, 'ft': 0.092903, 'in': 0.00064516 };
 
 const soilPresets = {
   earth: { name: "Earth / Loam", swell: 25, shrink: 10, color: '#5c4033', repose: 60 },
@@ -15,11 +14,15 @@ const soilPresets = {
 
 export default function ExcavationCalculator() {
   const [inputs, setInputs] = useState({
+    // Footprint
     excL: 30, excW: 15, excD: 6, unit: 'ft',
-    workingSpace: 2, 
-    slopeAngle: 60, 
+    // Engineering Tolerances
+    workingSpace: 2, // Extra space around foundation for workers
+    slopeAngle: 60, // Angle of repose (90 is vertical cut)
+    // Soil
     soilType: 'earth',
     swell: 25, shrink: 10,
+    // Ops
     truckCapacity: 15, 
     excavationRate: 150, 
     haulageRate: 500, 
@@ -29,8 +32,6 @@ export default function ExcavationCalculator() {
   const [mode, setMode] = useState('normal'); 
   const [visualTheme, setVisualTheme] = useState('realistic'); 
   const [results, setResults] = useState(null);
-  const [visualWarning, setVisualWarning] = useState("");
-  const [safetyWarning, setSafetyWarning] = useState(""); // NEW: OSHA Safety Engine
   
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
@@ -38,6 +39,7 @@ export default function ExcavationCalculator() {
   const controlsRef = useRef(null);
   const rendererRef = useRef(null);
   
+  // 3D Elements Refs
   const groundGroupRef = useRef(null);
   const particlesRef = useRef(null);
   const truckGroupRef = useRef(null);
@@ -48,6 +50,7 @@ export default function ExcavationCalculator() {
     let parsedValue = ['unit', 'soilType', 'currency'].includes(name) ? value : parseFloat(value) || 0;
     if (typeof parsedValue === 'number') parsedValue = Math.max(0, parsedValue);
     
+    // Cap slope angle to prevent breaking math
     if (name === 'slopeAngle') parsedValue = Math.min(90, Math.max(15, parsedValue));
 
     setInputs(prev => {
@@ -108,7 +111,7 @@ export default function ExcavationCalculator() {
     scene.add(groundGroup);
     groundGroupRef.current = groundGroup;
 
-    // Build the Upgraded 3D Dump Truck (Active Dumping Pose)
+    // Build the 3D Low-Poly Truck
     const truckGroup = new THREE.Group();
     const truckMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.4 });
     const darkMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
@@ -118,16 +121,8 @@ export default function ExcavationCalculator() {
     cab.position.set(3, 1.5, 0); cab.castShadow = true; truckGroup.add(cab);
     const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1, 2.8), darkMat);
     windowMesh.position.set(3, 2, 0); truckGroup.add(windowMesh);
-    
-    // Tilted Dump Bed
-    const bedGroup = new THREE.Group();
-    bedGroup.position.set(1.5, 1.8, 0); // Pivot point
     const bed = new THREE.Mesh(new THREE.BoxGeometry(5, 2, 3.2), darkMat);
-    bed.position.set(-2.5, 0, 0); // Offset from pivot
-    bed.castShadow = true; 
-    bedGroup.add(bed);
-    bedGroup.rotation.z = -Math.PI / 5; // Tilt up!
-    truckGroup.add(bedGroup);
+    bed.position.set(-1, 1.8, 0); bed.castShadow = true; truckGroup.add(bed);
     
     // Wheels
     const wheelGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.6, 16);
@@ -147,11 +142,10 @@ export default function ExcavationCalculator() {
       animationFrameId = requestAnimationFrame(animate);
       controls.update(); 
 
+      // Flying Dirt Animation
       if (particlesRef.current && animationDataRef.current.length > 0) {
-        let stillAnimating = false;
         animationDataRef.current.forEach((p, i) => {
           if (p.t < 1) {
-            stillAnimating = true;
             p.t += p.speed;
             if(p.t > 1) p.t = 1;
             const currentX = p.startX + (p.endX - p.startX) * p.t;
@@ -230,28 +224,27 @@ export default function ExcavationCalculator() {
     const d_m = excD * mult;
     const ws_m = workingSpace * mult;
 
-    // Safety Engine (OSHA standards simulation)
-    if (d_m > 1.5 && slopeAngle > 53) {
-        setSafetyWarning("⚠️ High Risk: Depth > 1.5m with steep cut. Trench shoring/shielding required by safety codes.");
-    } else {
-        setSafetyWarning("");
-    }
-
+    // Geometry Math (Frustum of a Pyramid)
+    // 1. Bottom Dimensions (Foundation + Working Space on all sides)
     const L_bot = foundationL + (ws_m * 2);
     const W_bot = foundationW + (ws_m * 2);
 
+    // 2. Top Dimensions (Based on Angle of Repose)
+    // tan(angle) = opposite(depth) / adjacent(horizontal run)
     const angleRad = slopeAngle * (Math.PI / 180);
     const horizontalRun = slopeAngle >= 90 ? 0 : d_m / Math.tan(angleRad);
     
     const L_top = L_bot + (horizontalRun * 2);
     const W_top = W_bot + (horizontalRun * 2);
 
+    // 3. Prismoidal Formula for Bank Volume
     const A_bot = L_bot * W_bot;
     const A_top = L_top * W_top;
     const A_mid = ((L_bot + L_top) / 2) * ((W_bot + W_top) / 2);
     
     const bankVol = (d_m / 6) * (A_bot + 4 * A_mid + A_top);
     
+    // Swell & Shrink
     const looseVol = bankVol * (1 + (swell / 100));
     const compactedVol = bankVol * (1 - (shrink / 100));
 
@@ -272,6 +265,7 @@ export default function ExcavationCalculator() {
     const isBlueprint = visualTheme === 'blueprint';
     const baseColor = soilPresets[inputs.soilType].color;
     
+    // Custom Material Function
     const getMat = (colorHex) => new THREE.MeshStandardMaterial({
         color: isBlueprint ? 0x0ea5e9 : colorHex,
         wireframe: isBlueprint,
@@ -280,14 +274,8 @@ export default function ExcavationCalculator() {
         roughness: 1, side: THREE.DoubleSide
     });
 
-    // Pushing the stockpile way back to avoid surcharge collapse
-    const pileRadius = Math.sqrt(looseVol) / 1.5;
-    const safeDistanceOffset = Math.max(8, horizontalRun * 2 + 5); 
-    const pileCenterX = (L_top/2) + pileRadius + safeDistanceOffset;
-    const pileCenterZ = 0;
-
-    // 1. Ground Surface
-    const terrainSize = Math.max(L_top + pileCenterX, W_top) * 3;
+    // 1. Ground Surface (Huge plane with a hole matching Top Dimensions)
+    const terrainSize = Math.max(L_top, W_top) * 3;
     const shape = new THREE.Shape();
     shape.moveTo(-terrainSize/2, -terrainSize/2);
     shape.lineTo(terrainSize/2, -terrainSize/2);
@@ -295,7 +283,7 @@ export default function ExcavationCalculator() {
     shape.lineTo(-terrainSize/2, terrainSize/2);
     shape.lineTo(-terrainSize/2, -terrainSize/2);
 
-    const hole = new THREE.Path();
+    const hole = new THREE.Path(); // The top opening of the pit
     hole.moveTo(-L_top/2, -W_top/2);
     hole.lineTo(L_top/2, -W_top/2);
     hole.lineTo(L_top/2, W_top/2);
@@ -305,7 +293,7 @@ export default function ExcavationCalculator() {
 
     const groundGeom = new THREE.ShapeGeometry(shape);
     groundGeom.rotateX(-Math.PI / 2);
-    const groundMesh = new THREE.Mesh(groundGeom, getMat('#3f4a30')); 
+    const groundMesh = new THREE.Mesh(groundGeom, getMat('#3f4a30')); // Grassy dark top
     groundMesh.receiveShadow = true;
     groundGroup.add(groundMesh);
 
@@ -317,7 +305,7 @@ export default function ExcavationCalculator() {
     floorMesh.receiveShadow = true;
     groundGroup.add(floorMesh);
 
-    // 3. Sloped Walls
+    // 3. Sloped Walls (Constructing Trapezoids via BufferGeometry)
     const buildWall = (p1, p2, p3, p4) => {
         const geom = new THREE.BufferGeometry();
         const verts = new Float32Array([...p1, ...p2, ...p3, ...p1, ...p3, ...p4]);
@@ -328,19 +316,24 @@ export default function ExcavationCalculator() {
         return mesh;
     };
     
+    // Coordinates (TopLeft, TopRight, BotRight, BotLeft)
+    // North Wall
     groundGroup.add(buildWall([-L_top/2, 0, -W_top/2], [L_top/2, 0, -W_top/2], [L_bot/2, -d_m, -W_bot/2], [-L_bot/2, -d_m, -W_bot/2]));
+    // South Wall
     groundGroup.add(buildWall([L_top/2, 0, W_top/2], [-L_top/2, 0, W_top/2], [-L_bot/2, -d_m, W_bot/2], [L_bot/2, -d_m, W_bot/2]));
+    // West Wall
     groundGroup.add(buildWall([-L_top/2, 0, W_top/2], [-L_top/2, 0, -W_top/2], [-L_bot/2, -d_m, -W_bot/2], [-L_bot/2, -d_m, W_bot/2]));
+    // East Wall
     groundGroup.add(buildWall([L_top/2, 0, -W_top/2], [L_top/2, 0, W_top/2], [L_bot/2, -d_m, W_bot/2], [L_bot/2, -d_m, -W_bot/2]));
 
-    // 4. Ghost Foundation
+    // 4. Ghost Foundation (Shows the actual building footprint inside the pit)
     const foundationGeom = new THREE.BoxGeometry(foundationL, 0.2, foundationW);
     const foundationMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, wireframe: true, transparent: true, opacity: 0.8 });
     const foundationMesh = new THREE.Mesh(foundationGeom, foundationMat);
     foundationMesh.position.y = -d_m + 0.1;
     groundGroup.add(foundationMesh);
 
-    // --- Particle Animation (Flying Dirt & Far Stockpile) ---
+    // --- Particle Animation (Flying Dirt & Stockpile) ---
     const particleCount = Math.min(2000, Math.floor(looseVol * 5)); 
     const pGeom = new THREE.BoxGeometry(0.4, 0.4, 0.4);
     const pMesh = new THREE.InstancedMesh(pGeom, getMat(baseColor), particleCount);
@@ -349,6 +342,9 @@ export default function ExcavationCalculator() {
     particlesRef.current = pMesh;
 
     const animData = [];
+    const pileRadius = Math.sqrt(looseVol) / 1.5;
+    const pileCenterX = (L_top/2) + pileRadius + Math.max(2, horizontalRun);
+    const pileCenterZ = 0;
 
     for(let i=0; i<particleCount; i++){
         const sx = (Math.random() - 0.5) * L_bot;
@@ -365,29 +361,24 @@ export default function ExcavationCalculator() {
             startX: sx, startY: sy, startZ: sz,
             endX: ex, endY: Math.max(0.2, ey), endZ: ez,
             t: -Math.random() * 2, 
-            speed: 0.008 + Math.random() * 0.015,
-            arcHeight: 5 + Math.random() * 5 + d_m,
+            speed: 0.01 + Math.random() * 0.015,
+            arcHeight: 2 + Math.random() * 4 + d_m,
             scale: 0.4 + Math.random() * 1.2
         });
     }
     animationDataRef.current = animData;
 
-    // Position the Dump Truck near the newly distanced pile
+    // Position the Dump Truck
     if(truckGroupRef.current) {
-        // Position it right where the dirt is landing
-        truckGroupRef.current.position.set(pileCenterX + 1, 0, pileCenterZ + pileRadius + 2);
-        truckGroupRef.current.rotation.y = -Math.PI / 4;
+        truckGroupRef.current.position.set(pileCenterX + pileRadius + 2, 0, pileCenterZ + 3);
+        truckGroupRef.current.rotation.y = -Math.PI / 6;
     }
 
-    // Dynamic Camera Re-Centering (Look between hole and pile)
-    const maxDim = Math.max(L_top + pileCenterX, W_top, d_m);
-    cameraRef.current.position.set(maxDim * 0.9, maxDim * 0.6, maxDim * 1.2);
-    controlsRef.current.target.set(pileCenterX / 3, -d_m/2, 0); // Focus slightly towards pile
+    // Adjust Camera dynamically
+    const maxDim = Math.max(L_top, W_top, d_m);
+    cameraRef.current.position.set(maxDim * 1.4, maxDim * 0.8, maxDim * 1.6);
+    controlsRef.current.target.set(0, -d_m/2, 0);
     scene.fog.density = 0.02 / Math.max(1, maxDim/10);
-
-    let warning = "";
-    if (theoreticalBricks > 30000) warning = `Massive Scale! 3D Visualizer capped to prevent lagging. Math remains exact.`;
-    setVisualWarning(warning);
 
     setResults({
       foundationL, foundationW, d_m, ws_m, horizontalRun, mult, 
@@ -399,6 +390,7 @@ export default function ExcavationCalculator() {
   return (
     <div className="flex flex-col xl:flex-row gap-6 p-4 md:p-6 bg-[#020617] text-slate-100 min-h-screen relative overflow-hidden font-sans print:p-0 print:bg-white print:text-black print:overflow-visible print:min-h-0 print:block">
       
+      {/* Background Glows */}
       <div className="absolute top-[-10%] left-[-5%] w-[400px] h-[400px] bg-emerald-600/20 blur-[120px] rounded-full pointer-events-none print:hidden"></div>
       <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-amber-600/10 blur-[150px] rounded-full pointer-events-none print:hidden"></div>
 
@@ -471,13 +463,6 @@ export default function ExcavationCalculator() {
                     </label>
                     <input type="range" name="slopeAngle" min="15" max="90" step="5" value={inputs.slopeAngle} onChange={handleInputChange} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500" />
                     <div className="flex justify-between text-[8px] text-slate-500 mt-1 uppercase font-bold"><span>15° (Flat)</span><span>90° (Vertical)</span></div>
-                    
-                    {/* NEW OSHA SAFETY WARNING */}
-                    {safetyWarning && (
-                        <div className="mt-2 p-2 bg-rose-500/20 border border-rose-500/50 rounded-md text-[10px] text-rose-300 font-medium leading-snug animate-pulse">
-                            {safetyWarning}
-                        </div>
-                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-700/50">
@@ -549,7 +534,7 @@ export default function ExcavationCalculator() {
                 ) : mode === 'civil' ? (
                     <h2 className="text-lg font-bold text-white uppercase tracking-widest">Financial Takeoff</h2>
                 ) : mode === 'math' ? (
-                    <h2 className="text-lg font-bold text-white uppercase tracking-widest">Volume Calculations</h2>
+                    <h2 className="text-lg font-bold text-white uppercase tracking-widest">Advanced Mathematics</h2>
                 ) : null}
             </div>
 
@@ -576,12 +561,6 @@ export default function ExcavationCalculator() {
                 <button onClick={() => setVisualTheme('realistic')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${visualTheme === 'realistic' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'text-slate-500 hover:text-slate-300'}`}>Realistic</button>
                 <button onClick={() => setVisualTheme('blueprint')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${visualTheme === 'blueprint' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-slate-500 hover:text-slate-300'}`}>Wireframe</button>
             </div>
-
-            {visualWarning && (
-                <div className="absolute bottom-20 right-6 bg-orange-500/20 backdrop-blur-md text-orange-200 border border-orange-500/30 text-[10px] px-3 py-1.5 rounded-full shadow-lg max-w-xs text-right">
-                    {visualWarning}
-                </div>
-            )}
         </div>
 
         {/* --- Engineering Math View --- */}
