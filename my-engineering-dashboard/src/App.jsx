@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import BricksCalculator from './components/BricksCalculator'; // IMPORT ADDED
+import BricksCalculator from './components/BricksCalculator';
+import FoundationCalculator from './components/FoundationCalculator';
 
 const SidebarIcon = ({ active, children, isDark }) => {
     const base = "w-10 h-10 lg:w-11 lg:h-11 shrink-0 rounded-xl flex items-center justify-center transition-all duration-300 cursor-pointer";
@@ -11,7 +12,6 @@ const SidebarIcon = ({ active, children, isDark }) => {
     return <div className={`${base} ${appliedClass}`}>{children}</div>;
 };
 
-// ADDED setActiveView to props
 const SidebarSection = ({ title, items, activeItem, setActiveView }) => (
   <div className="mb-8 shrink-0">
     <h3 className="text-slate-400 dark:text-zinc-500 font-bold text-[10px] tracking-[0.2em] uppercase mb-3 pl-2">{title}</h3>
@@ -21,7 +21,7 @@ const SidebarSection = ({ title, items, activeItem, setActiveView }) => (
         return (
             <div 
               key={item} 
-              onClick={() => setActiveView && setActiveView(item)} // ADDED click handler
+              onClick={() => setActiveView && setActiveView(item)}
               className={`text-[13px] px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 flex items-center gap-3 ${
                 isActive ? 'bg-slate-100 dark:bg-zinc-800/50 text-slate-900 dark:text-white font-medium' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-900/50'
               }`}
@@ -39,7 +39,6 @@ const SidebarSection = ({ title, items, activeItem, setActiveView }) => (
   </div>
 );
 
-// ADDED activeView and setActiveView to props
 const Sidebar = ({ isOpen, isMobile, closeMobile, isDark, activeView, setActiveView }) => {
   const sidebarClasses = isMobile 
     ? `fixed inset-y-0 left-0 z-50 transform transition-transform duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] ${isOpen ? 'translate-x-0' : '-translate-x-full'}`
@@ -99,7 +98,6 @@ const Sidebar = ({ isOpen, isMobile, closeMobile, isDark, activeView, setActiveV
   );
 };
 
-// ADDED title prop to dynamically show active view
 const DashboardHeader = ({ toggleLeft, toggleRight, isDark, toggleTheme, title }) => (
   <div className="flex flex-wrap items-center justify-between gap-4 mb-6 lg:mb-8 shrink-0 z-10 border-b border-slate-200 dark:border-transparent pb-4 dark:pb-0">
     <div className="flex items-center gap-3 lg:gap-4">
@@ -414,7 +412,6 @@ const App = () => {
   const [introFading, setIntroFading] = useState(false);
   const [isBuilding, setIsBuilding] = useState(false); 
 
-  // ADDED currentView State
   const [currentView, setCurrentView] = useState('Overview');
 
   useEffect(() => {
@@ -468,7 +465,6 @@ const App = () => {
 
       <div className={`w-full h-screen max-w-[1600px] lg:rounded-[2rem] flex overflow-hidden relative transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)] mx-auto ${isDark ? 'bg-dashboard shadow-premium-dark' : 'bg-lightdash shadow-premium-light'} ${showIntro && !introFading ? 'scale-90 opacity-0 blur-lg' : 'scale-100 opacity-100 blur-0'}`}>
         
-        {/* ADDED activeView and setActiveView to Sidebar */}
         <Sidebar isOpen={isLeftOpen} isMobile={isMobile} closeMobile={() => setIsLeftOpen(false)} isDark={isDark} activeView={currentView} setActiveView={setCurrentView} />
         
         <main className={`flex-1 flex flex-col p-4 sm:p-6 lg:p-8 overflow-hidden relative transition-colors duration-400 z-10 ${isDark ? 'bg-[#050b1a]' : 'bg-slate-50'}`}>
@@ -493,16 +489,17 @@ const App = () => {
             }} 
             isDark={isDark}
             toggleTheme={() => setIsDark(!isDark)}
-            title={currentView} // ADDED title prop based on state
+            title={currentView}
           />
           
           <div className="flex-1 flex flex-col xl:flex-row gap-6 overflow-hidden">
             
             <div className="flex-1 overflow-y-auto custom-scroll pr-2 lg:pr-4 pb-20 z-10 transition-all duration-500">
               
-              {/* CONDITIONAL RENDERING ADDED HERE */}
               {currentView === 'Bricks Calculator' ? (
                 <BricksCalculator />
+              ) : currentView === 'Foundation Calculator' ? (
+                <FoundationCalculator />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
                   <CalculatorCard title="Cement Mix" delay="0ms">
@@ -574,7 +571,6 @@ const App = () => {
               )}
             </div>
             
-            {/* The rest of the component remains exactly the same */}
             {isMobile && isRightOpen && (
                 <div className="fixed inset-0 bg-slate-900/20 dark:bg-black/60 backdrop-blur-sm z-40 transition-opacity" onClick={() => setIsRightOpen(false)}></div>
             )}
