@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import BricksCalculator from './components/BricksCalculator'; // IMPORT ADDED
+import BricksCalculator from './components/BricksCalculator';
+import ExcavationCalculator from './components/ExcavationCalculator'; // IMPORT ADDED
 
 const SidebarIcon = ({ active, children, isDark }) => {
     const base = "w-10 h-10 lg:w-11 lg:h-11 shrink-0 rounded-xl flex items-center justify-center transition-all duration-300 cursor-pointer";
@@ -68,7 +69,8 @@ const Sidebar = ({ isOpen, isMobile, closeMobile, isDark, activeView, setActiveV
           </div>
 
           <SidebarSection title="Core Materials" items={['Cement Calculator', 'Sand Calculator', 'Aggregate Calculator', 'Bricks Calculator', 'Concrete Calculator', 'Steel Calculator']} activeItem={activeView} setActiveView={setActiveView} />
-          <SidebarSection title="Structural" items={['Foundation Calculator', 'Slab Calculator', 'Column Calculator', 'Beam Calculator', 'Staircase Calculator']} activeItem={activeView} setActiveView={setActiveView} />
+          {/* ADDED 'Excavation Calculator' to the Structural items list */}
+          <SidebarSection title="Structural" items={['Foundation Calculator', 'Excavation Calculator', 'Slab Calculator', 'Column Calculator', 'Beam Calculator', 'Staircase Calculator']} activeItem={activeView} setActiveView={setActiveView} />
           <SidebarSection title="Measurements" items={['Area Calculator', 'Volume Calculator', 'Land Area Converter']} activeItem={activeView} setActiveView={setActiveView} />
           <SidebarSection title="Finishing" items={['Paint Calculator', 'Plaster Calculator', 'Tile Calculator']} activeItem={activeView} setActiveView={setActiveView} />
           <SidebarSection title="Costing" items={['Material Cost', 'Labour Cost', 'Total Project Estimator']} activeItem={activeView} setActiveView={setActiveView} />
@@ -143,7 +145,7 @@ const DashboardHeader = ({ toggleLeft, toggleRight, isDark, toggleTheme, title }
         <img src="https://ui-avatars.com/api/?name=Admin&background=020617&color=fff&bold=true&rounded=true" alt="Avatar" className="w-9 h-9 lg:w-10 lg:h-10 rounded-full border border-slate-200 dark:border-borderDark cursor-pointer shadow-sm" />
         
         <button onClick={toggleRight} className="p-2 ml-1 text-slate-500 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 dark:text-zinc-400 dark:hover:text-white dark:bg-cardDark dark:hover:bg-zinc-800 rounded-lg dark:border-borderDark transition-all shadow-sm lg:hidden xl:block">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 012-2h2a2 2 0 012 2" /></svg>
         </button>
       </div>
     </div>
@@ -503,6 +505,8 @@ const App = () => {
               {/* CONDITIONAL RENDERING ADDED HERE */}
               {currentView === 'Bricks Calculator' ? (
                 <BricksCalculator />
+              ) : currentView === 'Excavation Calculator' ? (
+                <ExcavationCalculator />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
                   <CalculatorCard title="Cement Mix" delay="0ms">
