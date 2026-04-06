@@ -4,6 +4,7 @@ import BricksCalculator from './components/BricksCalculator';
 import FoundationCalculator from './components/FoundationCalculator';
 
 import ExcavationCalculator from './components/ExcavationCalculator'; // IMPORT ADDED
+import ColumnCalculator from './components/ColumnCalculator'; 
 
 
 const SidebarIcon = ({ active, children, isDark }) => {
@@ -509,6 +510,8 @@ const App = () => {
 
               ) : currentView === 'Excavation Calculator' ? (
                 <ExcavationCalculator />
+              ) : currentView === 'Column Calculator' ? ( 
+                <ColumnCalculator />
 
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
