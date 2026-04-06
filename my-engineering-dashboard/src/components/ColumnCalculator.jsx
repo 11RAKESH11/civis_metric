@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { DragControls } from 'three/examples/jsm/controls/DragControls'; 
 
 const unitToMeter = { 'm': 1, 'ft': 0.3048, 'cm': 0.01, 'in': 0.0254 };
 
@@ -9,23 +10,22 @@ const COLORS = {
     DRY_CONCRETE: 0x9ca3af,
     WET_CONCRETE: 0x4b5563,
     REBAR: 0x334155,
-    FORMWORK: 0x92400e, // Wood color
+    FORMWORK: 0x92400e, 
     BASE_SLAB: 0x78716c,
     BLUEPRINT_STRUCT: 0x0ea5e9,
     BLUEPRINT_FORM: 0xf59e0b
 };
 
 export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
-  // --- Core Inputs ---
   const [unitSystem, setUnitSystem] = useState('ft');
   const [inputs, setInputs] = useState({
-    shape: 'rectangular', // 'rectangular' or 'circular'
-    count: 4,             // Number of columns
-    length: 1.5,          // Used for Rectangular
-    width: 1.5,           // Used for Rectangular
-    diameter: 1.5,        // Used for Circular
-    height: 10,           // Total height of column
-    steelRatio: 1.5,      // % of volume (typically 1-2.5% for columns)
+    shape: 'rectangular', 
+    count: 4,             
+    length: 1.5,          
+    width: 1.5,           
+    diameter: 1.5,        
+    height: 10,           
+    steelRatio: 1.5,      
     concreteWastage: 5,   
     rebarWastage: 5,
     concretePrice: 120,   
@@ -46,8 +46,8 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
   const controlsRef = useRef(null);
   const rendererRef = useRef(null);
   const resizeObserverRef = useRef(null);
+  const dragControlsRef = useRef(null); 
   
-  // Scene Objects for Animation
   const sceneObjectsRef = useRef({ columns: [] });
   const animStateRef = useRef({ active: false, startTime: 0 });
 
@@ -55,10 +55,7 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
     const { name, value } = e.target;
     let parsedValue = ['currency', 'shape'].includes(name) ? value : parseFloat(value) || 0;
     if (typeof parsedValue === 'number' && name !== 'shape') parsedValue = Math.max(0, parsedValue);
-    
-    // Ensure at least 1 column
     if (name === 'count') parsedValue = Math.max(1, Math.floor(parsedValue));
-    
     setInputs(prev => ({ ...prev, [name]: parsedValue }));
   };
 
@@ -106,7 +103,6 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
     controls.autoRotateSpeed = 0.5;
     controlsRef.current = controls;
 
-    // Lighting
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.5); 
     dirLight.position.set(15, 25, 15);
@@ -127,7 +123,6 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
 
     let animationFrameId;
     
-    // --- The Master Render & Animation Loop ---
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
       controls.update();
@@ -135,22 +130,13 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
       if (animStateRef.current.active && sceneObjectsRef.current.columns.length > 0) {
           const elapsed = (Date.now() - animStateRef.current.startTime) / 1000;
 
-          // Animation Timeline:
-          // 0.0 - 1.5s: Rebar cage rises
-          // 1.5 - 3.0s: Formwork wraps around
-          // 3.0 - 5.0s: Concrete pours
-          // 5.0 - 6.0s: Formwork fades/drops
-          // 6.0 - 7.5s: Concrete cures
-
           sceneObjectsRef.current.columns.forEach(({ rebar, formwork, concrete }) => {
-              // 1. Rebar
               if (elapsed < 1.5) {
                   rebar.visible = true;
                   formwork.visible = false;
                   concrete.visible = false;
                   rebar.scale.y = Math.max(0.001, elapsed / 1.5);
               } 
-              // 2. Formwork
               else if (elapsed < 3.0) {
                   rebar.scale.y = 1;
                   formwork.visible = true;
@@ -158,18 +144,13 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
                   const progress = (elapsed - 1.5) / 1.5;
                   formwork.scale.y = Math.max(0.001, progress);
               } 
-              // 3. Concrete Pour
               else if (elapsed < 5.0) {
                   formwork.scale.y = 1;
                   concrete.visible = true;
                   const progress = (elapsed - 3.0) / 2.0;
                   concrete.scale.y = Math.max(0.001, progress);
-                  
-                  if (visualTheme === 'realistic') {
-                      concrete.material.color.setHex(COLORS.WET_CONCRETE);
-                  }
+                  if (visualTheme === 'realistic') concrete.material.color.setHex(COLORS.WET_CONCRETE);
               } 
-              // 4. Formwork Stripping
               else if (elapsed < 6.0) {
                   concrete.scale.y = 1;
                   const progress = (elapsed - 5.0) / 1.0;
@@ -180,7 +161,6 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
                       formwork.visible = false;
                   }
               } 
-              // 5. Curing
               else if (elapsed < 7.5) {
                   formwork.visible = false;
                   if (visualTheme === 'realistic') {
@@ -190,7 +170,6 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
                       concrete.material.color.copy(wet.lerp(dry, cureProgress));
                   }
               } 
-              // End
               else {
                   formwork.visible = false;
                   concrete.scale.y = 1;
@@ -199,7 +178,6 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
               }
           });
       }
-
       renderer.render(scene, camera);
     };
     animate();
@@ -222,6 +200,7 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
     setTimeout(handleResize, 100);
 
     return () => {
+      if (dragControlsRef.current) dragControlsRef.current.dispose(); 
       if (resizeObserverRef.current) resizeObserverRef.current.disconnect();
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
@@ -262,11 +241,9 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
 
     if (!height || !count || !scene) return;
 
-    // Conversions
     const htM = height * unitToMeter[unitSystem];
     let volPerColumnM3 = 0;
     let formworkPerColumnM2 = 0;
-    
     let safeLen = 1, safeWid = 1, safeDia = 1;
 
     if (shape === 'rectangular') {
@@ -285,31 +262,21 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
 
     const totalExactVolumeM3 = volPerColumnM3 * count;
     const totalFormworkM2 = formworkPerColumnM2 * count;
-    
-    // Steel Calculation (Volume * ratio * density)
     const exactRebarKg = totalExactVolumeM3 * (steelRatio / 100) * 7850;
-
-    // Wastage & Orders
     const orderVolumeM3 = totalExactVolumeM3 * (1 + (concreteWastage / 100));
     const orderRebarKg = exactRebarKg * (1 + (rebarWastage / 100));
-
     const orderVolumeYd3 = orderVolumeM3 * 1.30795;
     const billableConcrete = unitSystem === 'ft' ? orderVolumeYd3 : orderVolumeM3;
-
-    // Costs
     const costConcrete = billableConcrete * concretePrice; 
     const costRebar = orderRebarKg * rebarPrice;
     const costFormwork = totalFormworkM2 * formworkPrice;
-    
-    const laborHours = orderVolumeM3 * 2.5; // Columns require dense labor for tying rebar & pouring
+    const laborHours = orderVolumeM3 * 2.5; 
     const costLabor = laborHours * laborRate;
     const grandTotal = costConcrete + costRebar + costFormwork + costLabor;
 
-    // --- 3D Scene Assembly ---
+    // Clean up old objects
     const toRemove = [];
-    scene.children.forEach(c => {
-        if (c.name === 'dynamicBuild') toRemove.push(c);
-    });
+    scene.children.forEach(c => { if (c.name === 'dynamicBuild') toRemove.push(c); });
     toRemove.forEach(c => {
         scene.remove(c);
         if (c.geometry) c.geometry.dispose();
@@ -317,21 +284,16 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
     });
 
     const isBlueprint = visualTheme === 'blueprint';
-    
     const getMat = (colorHex, opacityVal, isWireframe = false) => new THREE.MeshStandardMaterial({
-        color: colorHex, 
-        wireframe: isBlueprint || isWireframe, 
-        transparent: opacityVal < 1 || isBlueprint, 
-        opacity: isBlueprint ? 0.4 : opacityVal, 
-        roughness: 0.8, 
-        side: THREE.DoubleSide
+        color: colorHex, wireframe: isBlueprint || isWireframe, transparent: opacityVal < 1 || isBlueprint, 
+        opacity: isBlueprint ? 0.4 : opacityVal, roughness: 0.8, side: THREE.DoubleSide
     });
 
-    const mainGroup = new THREE.Group();
+    // THIS IS THE CRITICAL FIX: Changing THREE.Group() to THREE.Object3D()
+    const mainGroup = new THREE.Object3D();
     mainGroup.name = 'dynamicBuild'; 
 
-    // Base Slab (to sit the columns on)
-    const displayCount = Math.min(count, 16); // Cap visually at 16 to prevent clutter
+    const displayCount = Math.min(count, 36); 
     const cols = Math.ceil(Math.sqrt(displayCount));
     const rows = Math.ceil(displayCount / cols);
     
@@ -339,6 +301,7 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
     const padL = (cols * spacing);
     const padW = (rows * spacing);
     
+    // Base Slab
     const baseGeo = new THREE.PlaneGeometry(padL + 2, padW + 2);
     baseGeo.rotateX(-Math.PI / 2);
     const baseMesh = new THREE.Mesh(baseGeo, getMat(COLORS.BASE_SLAB, 1));
@@ -346,69 +309,89 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
     mainGroup.add(baseMesh);
 
     const generatedColumns = [];
+    const draggableObjects = []; 
 
-    // Generate Grid of Columns
     const startX = -(padL / 2) + (spacing / 2);
     const startZ = -(padW / 2) + (spacing / 2);
 
     for (let i = 0; i < displayCount; i++) {
         const r = Math.floor(i / cols);
         const c = i % cols;
-        const x = startX + (c * spacing);
-        const z = startZ + (r * spacing);
-
         const colGroup = new THREE.Group();
-        colGroup.position.set(x, 0, z);
+        colGroup.position.set(startX + (c * spacing), 0, startZ + (r * spacing));
 
         let concreteGeo, formGeo, rebarGeo;
-
         if (shape === 'rectangular') {
             concreteGeo = new THREE.BoxGeometry(safeLen, htM, safeWid);
-            formGeo = new THREE.BoxGeometry(safeLen + 0.05, htM, safeWid + 0.05); // slightly larger
-            rebarGeo = new THREE.BoxGeometry(safeLen - 0.1, htM - 0.1, safeWid - 0.1); // slightly smaller
+            formGeo = new THREE.BoxGeometry(safeLen + 0.05, htM, safeWid + 0.05); 
+            rebarGeo = new THREE.BoxGeometry(safeLen - 0.1, htM - 0.1, safeWid - 0.1); 
         } else {
             concreteGeo = new THREE.CylinderGeometry(safeDia/2, safeDia/2, htM, 32);
             formGeo = new THREE.CylinderGeometry((safeDia/2) + 0.025, (safeDia/2) + 0.025, htM, 32);
             rebarGeo = new THREE.CylinderGeometry((safeDia/2) - 0.05, (safeDia/2) - 0.05, htM - 0.1, 12);
         }
 
-        // Pivot geometries at the bottom so they scale upwards during animation
         concreteGeo.translate(0, htM / 2, 0);
         formGeo.translate(0, htM / 2, 0);
         rebarGeo.translate(0, htM / 2, 0);
 
-        // 1. Rebar Mesh (Inner Cage)
         const rebarMesh = new THREE.Mesh(rebarGeo, getMat(COLORS.REBAR, 1, true));
-        rebarMesh.castShadow = true;
-        colGroup.add(rebarMesh);
+        rebarMesh.castShadow = true; colGroup.add(rebarMesh);
 
-        // 2. Formwork Mesh (Outer Shuttering)
-        const formMaterial = getMat(isBlueprint ? COLORS.BLUEPRINT_FORM : COLORS.FORMWORK, 0.9);
-        const formMesh = new THREE.Mesh(formGeo, formMaterial);
-        formMesh.castShadow = !isBlueprint;
-        colGroup.add(formMesh);
+        const formMesh = new THREE.Mesh(formGeo, getMat(isBlueprint ? COLORS.BLUEPRINT_FORM : COLORS.FORMWORK, 0.9));
+        formMesh.castShadow = !isBlueprint; colGroup.add(formMesh);
 
-        // 3. Concrete Mesh (Final Solid)
-        const structColor = isBlueprint ? COLORS.BLUEPRINT_STRUCT : COLORS.DRY_CONCRETE;
-        const concMesh = new THREE.Mesh(concreteGeo, getMat(structColor, 1));
-        concMesh.castShadow = !isBlueprint;
-        concMesh.receiveShadow = !isBlueprint;
+        const concMesh = new THREE.Mesh(concreteGeo, getMat(isBlueprint ? COLORS.BLUEPRINT_STRUCT : COLORS.DRY_CONCRETE, 1));
+        concMesh.castShadow = !isBlueprint; concMesh.receiveShadow = !isBlueprint;
         colGroup.add(concMesh);
 
-        // Set initial state (fully built)
         rebarMesh.visible = false;
         formMesh.visible = false;
         concMesh.visible = true;
 
         mainGroup.add(colGroup);
-        generatedColumns.push({ rebar: rebarMesh, formwork: formMesh, concrete: concMesh });
+        generatedColumns.push({ group: colGroup, rebar: rebarMesh, formwork: formMesh, concrete: concMesh });
+        draggableObjects.push(colGroup); 
     }
 
     scene.add(mainGroup);
     sceneObjectsRef.current.columns = generatedColumns;
     animStateRef.current.active = false;
 
-    // Adjust camera to frame the grid
+    // --- SETUP DRAG CONTROLS ---
+    if (dragControlsRef.current) {
+        dragControlsRef.current.dispose(); 
+    }
+    
+    const dragControls = new DragControls(draggableObjects, cameraRef.current, rendererRef.current.domElement);
+    
+    dragControls.transformGroup = true; 
+    
+    dragControls.addEventListener('dragstart', function (event) {
+        if (controlsRef.current) {
+            controlsRef.current.enabled = false; 
+            controlsRef.current.autoRotate = false;
+        }
+        event.object.scale.set(1.05, 1.05, 1.05); 
+        document.body.style.cursor = 'grabbing';
+    });
+
+    dragControls.addEventListener('drag', function (event) {
+        event.object.position.y = 0; 
+    });
+
+    dragControls.addEventListener('dragend', function (event) {
+        if (controlsRef.current) {
+            controlsRef.current.enabled = true; 
+            controlsRef.current.autoRotate = true;
+        }
+        event.object.scale.set(1, 1, 1);
+        document.body.style.cursor = 'auto';
+    });
+
+    dragControlsRef.current = dragControls;
+
+    // Adjust camera
     const maxDim = Math.max(padL, padW, htM);
     cameraRef.current.position.set(maxDim * 0.8, maxDim * 0.5, maxDim * 1.2);
     controlsRef.current.target.set(0, htM / 3, 0); 
@@ -453,7 +436,6 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
         </div>
         
         <div className="overflow-y-auto custom-scroll pr-1 space-y-4 flex-1 pb-4">
-            
             <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-blue-500/30 transition-colors group">
                 <div className="flex items-center justify-between mb-3">
                     <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 group-hover:text-blue-400 transition-colors"><span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></span>Profile & Geometry</h3>
@@ -620,7 +602,14 @@ export default function ColumnCalculator({ isProjectMode = false, onAddOn }) {
 
         {/* 3D Canvas View */}
         <div className={`${mode === 'normal' ? 'flex' : 'hidden'} flex-1 relative min-h-[500px] w-full overflow-hidden bg-gradient-to-b from-slate-900/50 to-[#020617] group print:hidden`}>
-            <div ref={mountRef} className="absolute inset-0 cursor-move"></div>
+            
+            {/* Visual Hint for Drag and Drop */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-blue-500/80 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-[0_0_15px_rgba(59,130,246,0.4)] backdrop-blur-md pointer-events-none flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" /></svg>
+                Drag columns to move them
+            </div>
+
+            <div ref={mountRef} className="absolute inset-0"></div>
             
             <div className="absolute bottom-6 right-6 z-30 bg-slate-800/80 backdrop-blur-md p-1 rounded-xl border border-slate-700/50 flex gap-1 shadow-xl">
                 <button onClick={triggerSimulation} className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all bg-indigo-500/20 text-indigo-400 border border-indigo-500/50 hover:bg-indigo-500 hover:text-slate-900 mr-2 flex items-center gap-1">

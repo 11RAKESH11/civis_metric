@@ -5,6 +5,7 @@ import FoundationCalculator from './components/FoundationCalculator';
 
 import ExcavationCalculator from './components/ExcavationCalculator'; // IMPORT ADDED
 import ColumnCalculator from './components/ColumnCalculator'; 
+import Pool from './components/Pool'; // IMPORT ADDED
 
 
 const SidebarIcon = ({ active, children, isDark }) => {
@@ -77,7 +78,7 @@ const Sidebar = ({ isOpen, isMobile, closeMobile, isDark, activeView, setActiveV
           <SidebarSection title="Measurements" items={['Area Calculator', 'Volume Calculator', 'Land Area Converter']} activeItem={activeView} setActiveView={setActiveView} />
           <SidebarSection title="Finishing" items={['Paint Calculator', 'Plaster Calculator', 'Tile Calculator']} activeItem={activeView} setActiveView={setActiveView} />
           <SidebarSection title="Costing" items={['Material Cost', 'Labour Cost', 'Total Project Estimator']} activeItem={activeView} setActiveView={setActiveView} />
-          <SidebarSection title="Advanced" items={['Rebar Weight', 'Mortar Calculator', 'Insulation Estimator', 'Electrical Wiring']} activeItem={activeView} setActiveView={setActiveView} />
+          <SidebarSection title="Advanced" items={['Rebar Weight', 'Mortar Calculator', 'Insulation Estimator', 'Electrical Wiring', 'Pool Designer']} activeItem={activeView} setActiveView={setActiveView} />
           
           <div className="mt-2 mb-8 shrink-0 relative p-[1px] rounded-xl bg-gradient-to-br from-slate-200 to-slate-100 dark:from-borderDark dark:to-dashboard group cursor-pointer overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 dark:via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
@@ -512,6 +513,9 @@ const App = () => {
                 <ExcavationCalculator />
               ) : currentView === 'Column Calculator' ? ( 
                 <ColumnCalculator />
+
+              ) : currentView === 'Pool Designer' ? ( 
+                <Pool />
 
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-5">
