@@ -59,7 +59,7 @@ export default function RebarWeightCalculator() {
 
   useEffect(() => {
     const scene = new THREE.Scene();
-    scene.background = null;
+    scene.background = new THREE.Color(0x14171B);
     sceneRef.current = scene;
 
     const container = mountRef.current;
@@ -93,7 +93,7 @@ export default function RebarWeightCalculator() {
     dirLight.position.set(10, 15, 10);
     scene.add(dirLight);
 
-    const grid = new THREE.GridHelper(20, 20, 0x0ea5e9, 0x334155);
+    const grid = new THREE.GridHelper(20, 20, 0x0ea5e9, 0x1e293b);
     grid.position.y = -0.01;
     grid.material.transparent = true;
     grid.material.opacity = 0.25;

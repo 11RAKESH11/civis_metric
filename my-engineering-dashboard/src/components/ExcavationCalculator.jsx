@@ -87,7 +87,7 @@ export default function ExcavationCalculator({ isProjectMode = false, onAddOn })
   // --- Initialize 3D Scene ---
   useEffect(() => {
     const scene = new THREE.Scene();
-    scene.background = null; 
+    scene.background = new THREE.Color(0x14171B); 
     scene.fog = new THREE.FogExp2(0x0f172a, 0.015); 
     sceneRef.current = scene;
 

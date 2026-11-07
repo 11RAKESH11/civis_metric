@@ -61,7 +61,7 @@ export default function LandAreaConverter() {
   // --- Three.js Setup ---
   useEffect(() => {
     const scene = new THREE.Scene();
-    scene.background = null;
+    scene.background = new THREE.Color(0x14171B);
     scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
     sceneRef.current = scene;
 
@@ -97,7 +97,7 @@ export default function LandAreaConverter() {
     dirLight.position.set(20, 30, 20);
     scene.add(dirLight);
 
-    const grid = new THREE.GridHelper(50, 50, 0x0ea5e9, 0x334155);
+    const grid = new THREE.GridHelper(50, 50, 0x0ea5e9, 0x1e293b);
     grid.position.y = -0.01;
     grid.material.transparent = true;
     grid.material.opacity = 0.3;
@@ -291,10 +291,10 @@ export default function LandAreaConverter() {
         <div className="lg:col-span-7 flex flex-col gap-5">
           <div className="h-[280px] bg-surface rounded-lg overflow-hidden relative border border-line">
             <div ref={mountRef} className="w-full h-full" />
-            <div className="absolute top-4 left-4 pointer-events-none bg-black/40 px-3 py-1.5 rounded-lg border border-white/10 text-ink text-xs">
+            <div className="absolute top-4 left-4 pointer-events-none bg-surface/90 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-line shadow-e1 text-ink text-xs">
               <span className="text-primary font-bold">3D Survey Plot & Boundary Wall</span>
             </div>
-            <div className="absolute bottom-4 right-4 pointer-events-none bg-black/50 px-3 py-2 rounded-lg border border-white/10 text-ink text-right">
+            <div className="absolute bottom-4 right-4 pointer-events-none bg-surface/90 backdrop-blur-sm px-3 py-2 rounded-lg border border-line shadow-e1 text-ink text-right">
               <p className="text-xs text-muted">Boundary Wall Cost</p>
               <p className="text-lg font-bold text-ink">{currency}{conversions?.wallCost?.toLocaleString('en-IN', { maximumFractionDigits: 0 })} ({conversions?.perimeterFt} Rft)</p>
             </div>

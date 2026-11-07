@@ -134,16 +134,24 @@ function Workflow() {
 }
 
 const LAYERS = [
-  ['Concrete volume', 'Slab and column volume from length × width × thickness.'],
-  ['Reinforcement', 'Bar weight and cutting from the bending schedule.'],
-  ['Masonry quantities', 'Brick count and mortar, net of openings.'],
-  ['Material layers', 'Cement, sand and aggregate split by mix ratio.'],
+  ['concrete', 'Concrete volume', 'Slab and column volume from length × width × thickness.'],
+  ['steel', 'Reinforcement', 'Bar weight and cutting from the bending schedule.'],
+  ['bricks', 'Masonry quantities', 'Brick count and mortar, net of openings.'],
+  ['cement', 'Material layers', 'Cement, sand and aggregate split by mix ratio.'],
 ];
+const VISUAL_WORDS = 'See the structure. Understand the quantities.'.split(' ');
+
+// Corner marks, like a drawing sheet's registration ticks.
+const Corner = ({ pos }) => (
+  <span aria-hidden="true" className={`absolute h-5 w-5 border-stripe ${pos === 'tl' ? 'left-3 top-3 border-l-2 border-t-2' : pos === 'tr' ? 'right-3 top-3 border-r-2 border-t-2' : pos === 'bl' ? 'bottom-3 left-3 border-b-2 border-l-2' : 'bottom-3 right-3 border-b-2 border-r-2'}`} />
+);
 
 function Visual() {
   const sec = useRef(null);
   const explode = useRef(0);
   const [near, setNear] = useState(false);
+  const [seen, setSeen] = useState(false);
+  const [lit, setLit] = useState(0);
   useEffect(() => {
     const el = sec.current;
     if (!el) return undefined;
@@ -153,30 +161,64 @@ function Visual() {
       const p = clamp01((window.innerHeight - r.top) / (window.innerHeight + r.height));
       explode.current = clamp01((p - 0.35) / 0.3);
       el.style.setProperty('--p', p.toFixed(3));
+      // The feature cards light up in turn as the floors separate.
+      setLit(Math.min(LAYERS.length - 1, Math.floor(explode.current * LAYERS.length)));
     };
     let raf = 0;
     const onScroll = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(update); };
     scroller.addEventListener('scroll', onScroll, { passive: true });
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setNear(true); io.disconnect(); } }, { rootMargin: '100% 0px' });
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) setNear(true); }, { rootMargin: '100% 0px' });
     io.observe(el);
+    const io2 = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setSeen(true); io2.disconnect(); } }, { threshold: 0.25 });
+    io2.observe(el);
     update();
-    return () => { scroller.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); io.disconnect(); };
+    return () => { scroller.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); io.disconnect(); io2.disconnect(); };
   }, []);
   return (
     <section ref={sec} id="visual" aria-labelledby="visual-h" className="relative bg-nav-deep text-white overflow-hidden" style={{ '--p': 0 }}>
-      <div aria-hidden="true" className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: 'linear-gradient(rgb(var(--c-tint)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--c-tint)) 1px, transparent 1px)', backgroundSize: '40px 40px', transform: 'translateY(calc((var(--p) - 0.5) * -60px))' }} />
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 py-20 lg:py-28">
-        <Reveal><h2 id="visual-h" className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight max-w-3xl">See the structure. Understand the quantities.</h2></Reveal>
-        <div className="mt-10 grid lg:grid-cols-12 gap-6 items-center">
-          <div className="lg:col-span-8 relative h-[26rem] sm:h-[34rem] lg:h-[40rem] -mx-4 sm:mx-0">
+      <div aria-hidden="true" className="absolute inset-0 opacity-[0.10]" style={{ backgroundImage: 'linear-gradient(rgb(var(--c-tint)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--c-tint)) 1px, transparent 1px)', backgroundSize: '40px 40px', transform: 'translateY(calc((var(--p) - 0.5) * -60px))' }} />
+      <div aria-hidden="true" className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 55% 50% at 8% 95%, rgb(242 140 40 / 0.22), transparent 70%), radial-gradient(ellipse 40% 40% at 95% 8%, rgb(255 190 130 / 0.10), transparent 70%)' }} />
+
+      <div className="relative mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:py-28">
+        <p className={`flex items-center gap-3 font-mono text-xs font-bold uppercase tracking-[0.28em] text-tint transition-all duration-700 sm:text-sm ${seen ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}>
+          <span aria-hidden="true" className={`h-0.5 bg-stripe transition-[width] duration-700 ${seen ? 'w-10' : 'w-0'}`} />
+          Explore the model
+        </p>
+        <h2 id="visual-h" className="mt-4 max-w-4xl font-display text-[clamp(2.4rem,6.2vw,4.6rem)] font-bold uppercase leading-[0.98] tracking-[0.005em]">
+          {VISUAL_WORDS.map((w, i) => (
+            <span key={`${w}-${i}`} className="mr-[0.22em] inline-block overflow-hidden align-bottom pb-[0.1em]">
+              <span className={`inline-block transition-transform duration-[800ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${w === 'quantities.' ? 'text-sheen' : ''} ${seen ? 'translate-y-0' : 'translate-y-[115%]'}`} style={{ transitionDelay: `${150 + i * 70}ms` }}>{w}</span>
+            </span>
+          ))}
+        </h2>
+
+        <div className="mt-10 grid items-stretch gap-6 lg:grid-cols-12">
+          {/* The model, in a glass frame with registration marks */}
+          <div className="relative h-[26rem] overflow-hidden rounded-3xl border border-white/15 bg-white/[0.04] shadow-[inset_0_1px_0_rgb(255_255_255/0.12)] sm:h-[34rem] lg:col-span-8 lg:h-[38rem]">
+            <div aria-hidden="true" className="absolute inset-0" style={{ background: 'radial-gradient(circle at 50% 62%, rgb(242 140 40 / 0.14), transparent 62%)' }} />
             {near && <Suspense fallback={null}><BuildingScene className="absolute inset-0" explodeRef={explode} rotate={false} distance={34} /></Suspense>}
+            <Corner pos="tl" /><Corner pos="tr" /><Corner pos="bl" /><Corner pos="br" />
           </div>
-          <ul className="lg:col-span-4 space-y-4" style={{ transform: 'translateY(calc((var(--p) - 0.5) * -36px))' }}>
-            {LAYERS.map(([t, d], i) => (
-              <li key={t} className="border-l-[3px] border-stripe pl-4">
-                <Reveal delay={i}><p className="text-lg font-semibold">{t}</p><p className="text-base">{d}</p></Reveal>
-              </li>
-            ))}
+
+          <ul className="flex flex-col justify-center gap-3 lg:col-span-4" style={{ transform: 'translateY(calc((var(--p) - 0.5) * -24px))' }}>
+            {LAYERS.map(([icon, t, d], i) => {
+              const on = i === lit;
+              return (
+                <li
+                  key={t}
+                  className={`rounded-2xl border p-4 backdrop-blur-sm transition-all duration-500 ${on ? 'border-stripe/70 bg-white/10 shadow-[0_10px_30px_-12px_rgb(242_140_40/0.45)]' : 'border-white/10 bg-white/[0.03]'} ${seen ? 'translate-x-0 opacity-100' : 'translate-x-6 opacity-0'}`}
+                  style={{ transitionDelay: seen ? '0ms' : `${500 + i * 120}ms` }}
+                >
+                  <div className="flex items-start gap-3.5">
+                    <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[1rem] border transition-colors duration-500 ${on ? 'border-transparent bg-stripe text-black' : 'border-white/25 bg-white/10'}`}><ToolIcon id={icon} className="h-5 w-5" /></span>
+                    <div className="min-w-0">
+                      <p className="flex items-baseline gap-2 text-lg font-semibold leading-tight"><span className="font-mono text-xs font-bold tracking-widest text-tint">0{i + 1}</span>{t}</p>
+                      <p className="mt-1 text-base">{d}</p>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>

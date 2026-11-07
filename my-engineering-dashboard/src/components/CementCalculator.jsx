@@ -290,8 +290,8 @@ export default function CementCalculator() {
   // --- Init Three.js ---
   useEffect(() => {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020617);
-    scene.fog = new THREE.FogExp2(0x020617, 0.05);
+    scene.background = new THREE.Color(0x14171B);
+    scene.fog = new THREE.FogExp2(0x0f172a, 0.03);
     sceneRef.current = scene;
 
     const container = mountRef.current;
@@ -333,7 +333,7 @@ export default function CementCalculator() {
     rimLight.position.set(-5, 2, -5);
     scene.add(rimLight);
 
-    const gridHelper = new THREE.GridHelper(20, 20, 0x38bdf8, 0x1e293b);
+    const gridHelper = new THREE.GridHelper(20, 20, 0x0ea5e9, 0x1e293b);
     gridHelper.position.y = -0.01;
     gridHelper.material.transparent = true;
     gridHelper.material.opacity = 0.2;

@@ -49,7 +49,7 @@ export default function AggregateCalculator() {
   // --- Three.js Setup ---
   useEffect(() => {
     const scene = new THREE.Scene();
-    scene.background = null;
+    scene.background = new THREE.Color(0x14171B);
     scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
     sceneRef.current = scene;
 
@@ -85,7 +85,7 @@ export default function AggregateCalculator() {
     dirLight.position.set(15, 25, 15);
     scene.add(dirLight);
 
-    const grid = new THREE.GridHelper(30, 30, 0x0ea5e9, 0x334155);
+    const grid = new THREE.GridHelper(30, 30, 0x0ea5e9, 0x1e293b);
     grid.position.y = -0.01;
     grid.material.transparent = true;
     grid.material.opacity = 0.25;

@@ -57,7 +57,7 @@ export default function BeamCalculator() {
   // --- Three.js Setup ---
   useEffect(() => {
     const scene = new THREE.Scene();
-    scene.background = null;
+    scene.background = new THREE.Color(0x14171B);
     scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
     sceneRef.current = scene;
 
@@ -101,7 +101,7 @@ export default function BeamCalculator() {
     rimLight.position.set(-15, -5, -15);
     scene.add(rimLight);
 
-    const grid = new THREE.GridHelper(30, 30, 0x0ea5e9, 0x334155);
+    const grid = new THREE.GridHelper(30, 30, 0x0ea5e9, 0x1e293b);
     grid.position.y = -0.01;
     grid.material.transparent = true;
     grid.material.opacity = 0.25;
@@ -374,10 +374,10 @@ export default function BeamCalculator() {
         <div className="lg:col-span-7 flex flex-col gap-5">
           <div className="h-[360px] bg-surface rounded-lg overflow-hidden relative border border-line">
             <div ref={mountRef} className="w-full h-full" />
-            <div className="absolute top-4 left-4 pointer-events-none bg-black/40 px-3 py-1.5 rounded-lg border border-white/10 text-ink text-xs">
+            <div className="absolute top-4 left-4 pointer-events-none bg-surface/90 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-line shadow-e1 text-ink text-xs">
               <span className="text-primary font-bold">3D Beam Rebar Cage & Stirrups</span>
             </div>
-            <div className="absolute bottom-4 right-4 pointer-events-none bg-black/50 px-3 py-2 rounded-lg border border-white/10 text-ink text-right">
+            <div className="absolute bottom-4 right-4 pointer-events-none bg-surface/90 backdrop-blur-sm px-3 py-2 rounded-lg border border-line shadow-e1 text-ink text-right">
               <p className="text-xs text-muted">Total Beams</p>
               <p className="text-lg font-bold text-primary">{inputs.beamCount} Units</p>
             </div>

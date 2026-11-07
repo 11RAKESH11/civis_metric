@@ -341,7 +341,7 @@ const App = () => {
       {paletteOpen && <CommandPalette onClose={closePalette} onSelect={(id) => { closePalette(); navigate(id); }} />}
 
       <main className="relative flex-1 min-w-0 flex flex-col lg:h-full" inert={blocked ? true : undefined}>
-        <header className="sticky top-0 z-20 lg:static shrink-0 flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-3 border-b border-line bg-surface/60 backdrop-blur-xl">
+        <header className="sticky top-0 z-20 lg:static shrink-0 flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-3 border-b border-line bg-surface/95">
           <button
             ref={menuButtonRef}
             type="button"

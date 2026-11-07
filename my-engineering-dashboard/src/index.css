@@ -210,14 +210,12 @@ input::placeholder, textarea::placeholder { color: rgb(var(--c-text) / 0.62) !im
 /* --- GLASS (dashboard): frosted panels over the house drawing --- */
 @layer components {
     .glass {
-        background: rgb(var(--c-surface) / 0.4);
-        -webkit-backdrop-filter: blur(22px) saturate(1.2);
-        backdrop-filter: blur(22px) saturate(1.2);
+        background: rgb(var(--c-surface) / 0.93);
         border-radius: 1.5rem;
         box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), inset 0 0 0 1px rgb(var(--c-border) / 0.8), 0 24px 56px -30px rgb(var(--c-shadow) / 0.4);
     }
     .glass-panel {
-        background: rgb(var(--c-surface) / 0.62);
+        background: rgb(var(--c-surface) / 0.96);
         border-radius: 1.1rem;
         box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 0 0 1px rgb(var(--c-border) / 0.7), 0 10px 24px -22px rgb(var(--c-shadow) / 0.45);
     }
@@ -233,23 +231,19 @@ input::placeholder, textarea::placeholder { color: rgb(var(--c-text) / 0.62) !im
    header: a backdrop-filter on an ancestor would trap position:fixed dialogs inside it. */
 /* Sidebar: dark frosted glass over the same backdrop */
 .side-glass {
-    background: linear-gradient(180deg, rgb(var(--c-nav) / 0.86), rgb(var(--c-nav-deep) / 0.92));
-    -webkit-backdrop-filter: blur(24px) saturate(1.25);
-    backdrop-filter: blur(24px) saturate(1.25);
+    background: linear-gradient(180deg, rgb(var(--c-nav) / 0.97), rgb(var(--c-nav-deep) / 0.98));
     box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.08), 10px 0 36px -14px rgb(0 0 0 / 0.45);
 }
 .side-glass .custom-scroll::-webkit-scrollbar-thumb { background-color: rgb(255 255 255 / 0.2); }
 .side-glass .custom-scroll::-webkit-scrollbar-thumb:hover { background-color: rgb(255 255 255 / 0.38); }
 @supports not (backdrop-filter: blur(1px)) { .side-glass { background: rgb(var(--c-nav)); } }
-.app-glass .bg-surface { background-color: rgb(var(--c-surface) / 0.68); }
-.app-glass .bg-sunken { background-color: rgb(var(--c-sunken) / 0.62); }
-.app-glass .bg-bg { background-color: rgb(var(--c-surface) / 0.8); }
+.app-glass .bg-surface { background-color: rgb(var(--c-surface) / 0.94); }
+.app-glass .bg-sunken { background-color: rgb(var(--c-sunken) / 0.88); }
+.app-glass .bg-bg { background-color: rgb(var(--c-surface) / 0.94); }
 .app-glass input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), .app-glass select, .app-glass textarea { background-color: rgb(var(--c-surface) / 0.9); }
 .app-glass .calc-card, .app-glass .stat-card {
     border-radius: 1rem;
     border-color: transparent;
-    -webkit-backdrop-filter: blur(16px) saturate(1.15);
-    backdrop-filter: blur(16px) saturate(1.15);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5), inset 0 0 0 1px rgb(var(--c-border) / 0.75), 0 10px 24px -22px rgb(var(--c-shadow) / 0.45);
 }
 .dark.app-glass .calc-card, .dark .app-glass .calc-card, .dark .app-glass .stat-card { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 0 0 1px rgb(var(--c-border) / 0.85); }
@@ -393,4 +387,27 @@ input::placeholder, textarea::placeholder { color: rgb(var(--c-text) / 0.62) !im
 .app-glass tbody td:not(:last-child), .app-glass tbody th:not(:last-child) { border-right: 1px solid rgb(var(--c-border) / 0.95); }
 .app-glass tfoot td:not(:last-child), .app-glass tfoot th:not(:last-child) { border-right: 1px solid rgb(var(--c-border-control) / 0.3); }
 .app-glass thead th, .app-glass tbody td, .app-glass tbody th, .app-glass tfoot td, .app-glass tfoot th { padding-left: 1rem; padding-right: 1rem; }
-.app-glass table { background: rgb(var(--c-surface) / 0.9); }
+.app-glass table { background: rgb(var(--c-surface) / 0.97); }
+
+/* --- ESTIMATOR CARDS: the same glass-card look as the Dashboard panels --- */
+.app-glass .bg-surface.rounded-lg:is([class~="p-4"], [class~="p-5"], [class~="p-6"], [class*="sm:p-"], .overflow-hidden) {
+    border-radius: 1.1rem;
+    border-color: transparent;
+    background-color: rgb(var(--c-surface) / 0.96);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55), inset 0 0 0 1px rgb(var(--c-border) / 0.75), 0 12px 28px -22px rgb(var(--c-shadow) / 0.5);
+}
+.dark .app-glass .bg-surface.rounded-lg:is([class~="p-4"], [class~="p-5"], [class~="p-6"], [class*="sm:p-"], .overflow-hidden) {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 0 0 1px rgb(var(--c-border) / 0.85);
+}
+/* Boxes inside a card (the grouped input sections) stay lighter and softer */
+.app-glass .rounded-lg.border.border-line:not(.bg-surface):is([class~="p-3"], [class~="p-4"]) {
+    border-radius: 1rem;
+    border-color: rgb(var(--c-border) / 0.6);
+    background-color: rgb(var(--c-surface) / 0.45);
+}
+.dark .app-glass .rounded-lg.border.border-line:not(.bg-surface):is([class~="p-3"], [class~="p-4"]) {
+    background-color: rgb(var(--c-surface) / 0.35);
+}
+@media print {
+    .app-glass .bg-surface.rounded-lg { box-shadow: none; }
+}

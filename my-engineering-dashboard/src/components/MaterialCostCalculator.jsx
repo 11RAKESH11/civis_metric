@@ -42,7 +42,7 @@ export default function MaterialCostCalculator() {
   // --- Three.js Setup ---
   useEffect(() => {
     const scene = new THREE.Scene();
-    scene.background = null;
+    scene.background = new THREE.Color(0x14171B);
     scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
     sceneRef.current = scene;
 
@@ -78,7 +78,7 @@ export default function MaterialCostCalculator() {
     dirLight.position.set(15, 25, 15);
     scene.add(dirLight);
 
-    const grid = new THREE.GridHelper(30, 30, 0x0ea5e9, 0x334155);
+    const grid = new THREE.GridHelper(30, 30, 0x0ea5e9, 0x1e293b);
     grid.position.y = -0.01;
     grid.material.transparent = true;
     grid.material.opacity = 0.25;
@@ -272,10 +272,10 @@ export default function MaterialCostCalculator() {
         <div className="lg:col-span-5 flex flex-col gap-5">
           <div className="h-[280px] bg-surface rounded-lg overflow-hidden relative border border-line">
             <div ref={mountRef} className="w-full h-full" />
-            <div className="absolute top-4 left-4 pointer-events-none bg-black/40 px-3 py-1.5 rounded-lg border border-white/10 text-ink text-xs">
+            <div className="absolute top-4 left-4 pointer-events-none bg-surface/90 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-line shadow-e1 text-ink text-xs">
               <span className="text-accent font-bold">3D Material Stockpile Depot</span>
             </div>
-            <div className="absolute bottom-4 right-4 pointer-events-none bg-black/50 px-3 py-2 rounded-lg border border-white/10 text-ink text-right">
+            <div className="absolute bottom-4 right-4 pointer-events-none bg-surface/90 backdrop-blur-sm px-3 py-2 rounded-lg border border-line shadow-e1 text-ink text-right">
               <p className="text-xs text-muted">Total Procurement</p>
               <p className="text-lg font-bold text-accent">{currency}{results?.grandTotal?.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</p>
             </div>
