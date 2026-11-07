@@ -77,17 +77,13 @@ const initialPhases = [
 ];
 
 export default function ProjectTracker() {
-  const { engineerInCharge, projectRef } = useProject();
+  const { engineerInCharge } = useProject();
   const [phases, setPhases] = useState(initialPhases);
   const [activeTab, setActiveTab] = useState('milestones'); // 'milestones' | 'curing' | 'manpower' | 'timeline'
   const [selectedPhaseId, setSelectedPhaseId] = useState('phase-2');
 
   // Daily Site Log State
-  const [siteNotes, setSiteNotes] = useState([
-    { id: 'n-1', date: '2026-08-15', author: 'Er. Mohammed Ismail', text: 'First floor slab concrete pour completed (68 m³). Cube samples taken for 7, 14, and 28-day compressive tests. Curing ponds formed.', type: 'critical' },
-    { id: 'n-2', date: '2026-08-14', author: 'Site Supervisor Raj', text: 'Rebar BBS inspection verified: Top and bottom mats spacing 150mm c/c with 25mm PVC cover blocks. Passed for pour.', type: 'inspection' },
-    { id: 'n-3', date: '2026-08-12', author: 'Procurement Officer', text: 'Delivered 12 tonnes of Fe 500D Ø12mm & Ø16mm TMT bars from primary producer (Jindal). Test certificates filed.', type: 'material' }
-  ]);
+  const [siteNotes, setSiteNotes] = useState([]);
   const [newNoteText, setNewNoteText] = useState('');
   const [newNoteType, setNewNoteType] = useState('general');
 
@@ -167,12 +163,6 @@ export default function ProjectTracker() {
 
         <div className="relative z-10 flex flex-col wide:flex-row justify-between items-start wide:items-center gap-6">
           <div className="space-y-2 flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3.5 py-1 rounded-full bg-primary/15 border border-line-control text-ink text-xs font-bold uppercase tracking-wider">
-                IS 456 Construction QA/QC & CPM Lifecycle
-              </span>
-              <span className="text-sm font-semibold tabular-nums text-ink">Ref: {projectRef}</span>
-            </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-ink tracking-tight leading-tight">
               Construction Project <span className="gradient-text">Milestone & Progress Tracker</span>
             </h2>
@@ -526,6 +516,9 @@ Resident Engineer Site Diary
 
               {/* Site Notes Feed */}
               <div className="space-y-3 max-h-[360px] overflow-y-auto custom-scroll pr-1">
+                {siteNotes.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-line bg-bg p-4 text-sm text-ink">No entries yet. Log a pour, an inspection or a delivery above and it will appear here.</p>
+                )}
                 {siteNotes.map(note => (
                   <div key={note.id} className="bg-bg border border-line rounded-xl p-4 space-y-1 text-sm">
                     <div className="flex justify-between items-center text-xs text-muted">

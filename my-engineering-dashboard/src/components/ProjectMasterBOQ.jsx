@@ -8,7 +8,6 @@ export default function ProjectMasterBOQ() {
     clientName, setClientName,
     siteLocation, setSiteLocation,
     engineerInCharge, setEngineerInCharge,
-    projectRef, 
     contractorMargin, setContractorMargin,
     gstRate, setGstRate,
     contingencyRate, setContingencyRate,
@@ -99,7 +98,7 @@ export default function ProjectMasterBOQ() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `${projectRef}_Master_BOQ_Schedule.csv`);
+    link.setAttribute('download', `${(projectName || 'Project').trim().replace(/[^\w-]+/g, '_')}_BOQ.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -118,7 +117,6 @@ export default function ProjectMasterBOQ() {
               <span className="px-3.5 py-1 rounded-full bg-primary/15 border border-line-control text-ink text-xs font-bold uppercase tracking-wider">
                 CPWD / DSR Standard Schedule of Rates (SOR)
               </span>
-              <span className="text-sm font-semibold tabular-nums text-ink">Ref: {projectRef}</span>
             </div>
 
             {isEditingInfo ? (
@@ -128,6 +126,7 @@ export default function ProjectMasterBOQ() {
                   <input id="projectmasterboq-field-0"
                     type="text"
                     value={projectName}
+                    placeholder="Project name"
                     onChange={e => setProjectName(e.target.value)}
                     className="w-full bg-sunken border border-line rounded-lg px-3 py-1.5 text-xs text-ink outline-none focus:border-primary"
                   />
@@ -137,6 +136,7 @@ export default function ProjectMasterBOQ() {
                   <input id="projectmasterboq-field-1"
                     type="text"
                     value={clientName}
+                    placeholder="Client or owner"
                     onChange={e => setClientName(e.target.value)}
                     className="w-full bg-sunken border border-line rounded-lg px-3 py-1.5 text-xs text-ink outline-none focus:border-primary"
                   />
@@ -146,6 +146,7 @@ export default function ProjectMasterBOQ() {
                   <input id="projectmasterboq-field-2"
                     type="text"
                     value={siteLocation}
+                    placeholder="Site location"
                     onChange={e => setSiteLocation(e.target.value)}
                     className="w-full bg-sunken border border-line rounded-lg px-3 py-1.5 text-xs text-ink outline-none focus:border-primary"
                   />
@@ -155,6 +156,7 @@ export default function ProjectMasterBOQ() {
                   <input id="projectmasterboq-field-3"
                     type="text"
                     value={engineerInCharge}
+                    placeholder="Engineer in charge"
                     onChange={e => setEngineerInCharge(e.target.value)}
                     className="w-full bg-sunken border border-line rounded-lg px-3 py-1.5 text-xs text-ink outline-none focus:border-primary"
                   />
@@ -163,10 +165,16 @@ export default function ProjectMasterBOQ() {
             ) : (
               <div>
                 <h2 className="text-3xl sm:text-4xl font-bold text-ink tracking-tight leading-tight">
-                  {projectName}
+                  {projectName || 'Untitled project'}
                 </h2>
                 <p className="text-sm sm:text-base text-ink mt-2 leading-relaxed">
-                  Client: <strong className="text-ink">{clientName}</strong> · Location: <span>{siteLocation}</span> · Engr: <strong className="text-primary">{engineerInCharge}</strong>
+                  {[
+                    clientName && <span key="c">Client: <strong className="text-ink">{clientName}</strong></span>,
+                    siteLocation && <span key="l">Location: {siteLocation}</span>,
+                    engineerInCharge && <span key="e">Engineer: <strong className="text-primary">{engineerInCharge}</strong></span>,
+                  ].filter(Boolean).reduce((acc, el, i) => (i ? [...acc, <span key={`d${i}`}> · </span>, el] : [el]), []).concat(
+                    !clientName && !siteLocation && !engineerInCharge ? ['Add the project name, client, location and engineer with Edit Project Info.'] : [],
+                  )}
                 </p>
               </div>
             )}

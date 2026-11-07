@@ -227,6 +227,9 @@ const App = () => {
   const paletteOpener = useRef(null);
 
   const tool = findTool(route);
+  // Animated page header on every tool page.
+  const richHeader = Boolean(tool);
+  const groupName = tool ? availableGroups.find((g) => g.tools.some((t) => t.id === tool.id))?.group : null;
   const pageTitle = tool ? headingFor(tool) : route === 'estimators' ? 'Estimators' : 'Dashboard';
 
   // A trade is open if you opened it, or it holds the current tool; Core materials starts open.
@@ -341,7 +344,13 @@ const App = () => {
       {paletteOpen && <CommandPalette onClose={closePalette} onSelect={(id) => { closePalette(); navigate(id); }} />}
 
       <main className="relative flex-1 min-w-0 flex flex-col lg:h-full" inert={blocked ? true : undefined}>
-        <header className="sticky top-0 z-20 lg:static shrink-0 flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-3 border-b border-line bg-surface/95">
+        <header className={`sticky top-0 z-20 lg:relative shrink-0 flex items-center gap-3 px-4 sm:px-6 lg:px-8 py-3 border-b border-line bg-surface/95 ${richHeader ? 'isolate overflow-hidden' : ''}`}>
+          {richHeader && (
+            <>
+              <span aria-hidden="true" className="hdr-grid pointer-events-none absolute inset-y-0 right-0 -z-10 w-2/3" />
+              <span aria-hidden="true" className="hdr-bar pointer-events-none absolute inset-x-0 bottom-0 h-0.5" />
+            </>
+          )}
           <button
             ref={menuButtonRef}
             type="button"
@@ -352,9 +361,19 @@ const App = () => {
           >
             <MenuIcon />
           </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-ink truncate">{pageTitle}</h1>
-            {tool && <p className="hidden sm:block mt-0.5 text-sm text-muted truncate">{tool.summary}</p>}
+          <div className="flex min-w-0 flex-1 items-center gap-3.5">
+            {richHeader && (
+              <span key={`tile-${route}`} aria-hidden="true" className={`hdr-tile hidden shrink-0 ${tool.globalUnits ? "2xl:grid" : "sm:grid"}`}>
+                <ToolIcon id={tool.id} className="relative z-10 h-6 w-6" />
+              </span>
+            )}
+            <div key={route} className="min-w-0">
+              {richHeader && groupName && (
+                <p className="hdr-rise hidden items-center gap-2 text-[11px] font-bold uppercase leading-none tracking-[0.2em] text-primary sm:flex" style={{ '--d': '60ms' }}><span aria-hidden="true" className="hdr-line" />{groupName}</p>
+              )}
+              <h1 className={`text-xl sm:text-2xl font-semibold tracking-tight text-ink truncate ${richHeader ? 'hdr-rise mt-1 leading-tight' : ''}`} style={richHeader ? { '--d': '120ms' } : undefined}>{pageTitle}</h1>
+              {tool && <p className={`hidden sm:block mt-0.5 text-sm font-medium text-ink truncate ${richHeader ? 'hdr-rise' : ''}`} style={richHeader ? { '--d': '200ms' } : undefined}>{tool.tagline || tool.summary}</p>}
+            </div>
           </div>
           {tool?.globalUnits && <UnitSwitch />}
           <button
