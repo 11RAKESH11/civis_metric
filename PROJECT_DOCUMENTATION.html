@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CivisMetric V2 - End-to-End Project Documentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --accent: #0ea5e9;
+      --secondary: #0f172a;
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-300: #cbd5e1;
+      --slate-400: #94a3b8;
+      --slate-500: #64748b;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-800: #1e293b;
+      --slate-900: #0f172a;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --code-bg: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #f8fafc;
+      color: #334155;
+      line-height: 1.65;
+      font-size: 15px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Floating Print Button for Screen View */
+    .action-bar {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #ffffff;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.45);
+      background: linear-gradient(135deg, #0369a1, #075985);
+    }
+
+    .btn-secondary {
+      background: #1e293b;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+    }
+    .btn-secondary:hover {
+      background: #0f172a;
+    }
+
+    .doc-container {
+      max-width: 1000px;
+      margin: 40px auto;
+      background: #ffffff;
+      padding: 60px 70px;
+      border-radius: 20px;
+      box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+
+    /* Header Cover */
+    .cover-header {
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 30px;
+      margin-bottom: 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .logo-title-group h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 34px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, #0284c7, #06b6d4);
+      color: white;
+      font-size: 14px;
+      padding: 4px 12px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      font-size: 16px;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .doc-meta {
+      text-align: right;
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+    }
+
+    .doc-meta strong {
+      color: #0f172a;
+    }
+
+    /* Section Styles */
+    h2 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 40px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2 .section-num {
+      background: #e0f2fe;
+      color: #0284c7;
+      font-size: 14px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+    }
+
+    h3 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-top: 24px;
+      margin-bottom: 10px;
+    }
+
+    h4 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #334155;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin-bottom: 14px;
+      color: #475569;
+    }
+
+    ul, ol {
+      margin-bottom: 16px;
+      padding-left: 24px;
+      color: #475569;
+    }
+
+    li {
+      margin-bottom: 6px;
+    }
+
+    /* Highlight Cards */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      margin: 20px 0;
+    }
+
+    .stat-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 18px 20px;
+      transition: all 0.2s ease;
+    }
+
+    .stat-card.accent {
+      border-left: 4px solid #0284c7;
+      background: #f0f9ff;
+    }
+
+    .stat-card.success {
+      border-left: 4px solid #10b981;
+      background: #f0fdf4;
+    }
+
+    .stat-card.warning {
+      border-left: 4px solid #f59e0b;
+      background: #fffbeb;
+    }
+
+    .stat-card h4 {
+      margin-top: 0;
+      color: #0f172a;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-card p {
+      font-size: 13.5px;
+      margin-bottom: 0;
+      color: #475569;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 13.5px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border: 1px solid #e2e8f0;
+    }
+
+    th {
+      background: #f1f5f9;
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    /* Code & Technical Blocks */
+    pre, code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    code {
+      background: #f1f5f9;
+      color: #0369a1;
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 18px 20px;
+      border-radius: 12px;
+      overflow-x: auto;
+      font-size: 12.5px;
+      line-height: 1.6;
+      margin: 16px 0;
+      border: 1px solid #1e293b;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    .math-box {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #0284c7;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13.5px;
+      color: #0f172a;
+      margin: 14px 0;
+      line-height: 1.5;
+    }
+
+    .endpoint-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      margin-right: 6px;
+    }
+
+    .badge-post { background: #dbeafe; color: #1d4ed8; }
+    .badge-get { background: #dcfce7; color: #15803d; }
+
+    /* Footer */
+    .doc-footer {
+      margin-top: 50px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    /* Print Specific Styling */
+    @media print {
+      body {
+        background: #ffffff;
+        color: #000000;
+      }
+      .action-bar {
+        display: none !important;
+      }
+      .doc-container {
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+        border: none;
+        box-shadow: none;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+      pre {
+        background: #f8fafc !important;
+        color: #0f172a !important;
+        border: 1px solid #cbd5e1 !important;
+      }
+      a {
+        text-decoration: none;
+        color: inherit;
+      }
+      h2 {
+        break-after: avoid;
+      }
+      table, .stat-card, .math-box {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Screen Action Bar -->
+  <div class="action-bar">
+    <button class="btn" onclick="window.print()">
+      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+      Print / Save as PDF
+    </button>
+  </div>
+
+  <div class="doc-container">
+
+    <!-- Cover Header -->
+    <div class="cover-header">
+      <div class="logo-title-group">
+        <h1>CivisMetric V2 <span class="logo-badge">ENTERPRISE SUITE</span></h1>
+        <div class="subtitle">Next-Generation Civil Engineering Suite, CAD Dashboard & Estimation Engine</div>
+      </div>
+      <div class="doc-meta">
+        <div><strong>Document Version:</strong> 2.0.0</div>
+        <div><strong>Release Type:</strong> Full Engineering Spec</div>
+        <div><strong>Compliance:</strong> IS 456 / IS 10262 / IS 1200 / ACI 318</div>
+        <div><strong>Generated:</strong> August 2026</div>
+      </div>
+    </div>
+
+    <!-- Executive Summary -->
+    <h2><span class="section-num">01</span> Executive Overview</h2>
+    <p>
+      <strong>CivisMetric V2</strong> is a unified, full-stack digital engineering platform engineered to eliminate calculation errors, streamline material quantification, automate Bar Bending Schedules (BBS), and accelerate multi-disciplinary construction project management.
+    </p>
+    <p>
+      By integrating modern web technologies (<strong>React 19</strong>, <strong>Vite</strong>, <strong>Three.js</strong>, and <strong>Express.js</strong>) with rigorous civil engineering standards, CivisMetric V2 empowers structural engineers, quantity surveyors, site managers, and contractors with 33+ computational modules and a live interactive 2D/3D CAD studio.
+    </p>
+
+    <div class="card-grid">
+      <div class="stat-card accent">
+        <h4>📐 33+ Specialized Calculators</h4>
+        <p>Complete mathematical coverage for core materials, structural concrete, steel reinforcement, finishing, and MEP sizing.</p>
+      </div>
+      <div class="stat-card success">
+        <h4>⚡ 2D/3D WebGL CAD Studio</h4>
+        <p>Real-time drafting canvas with multi-layering, snap-to-grid, vector JSON export, and 3D wireframe inspection.</p>
+      </div>
+      <div class="stat-card warning">
+        <h4>📊 Auto-Aggregated Master BOQ</h4>
+        <p>Continuous synchronization of quantities and project schedules with live Schedule of Rates (SOR) pricing.</p>
+      </div>
+      <div class="stat-card accent">
+        <h4>✂️ Rebar Waste Minimization</h4>
+        <p>1D Cutting Stock Optimization algorithm reducing commercial 12m steel rebar scrap from 15% to under 2.5%.</p>
+      </div>
+    </div>
+
+    <!-- System Architecture -->
+    <h2><span class="section-num">02</span> System Architecture & Tech Stack</h2>
+    <p>CivisMetric V2 adopts a decoupled client-server micro-route architecture designed for rapid responsiveness, zero-lag reactive input processing, and modular scalability.</p>
+
+    <pre><code>+---------------------------------------------------------------------------------------+
+|                                    CIVISMETRIC V2 UI                                   |
+|   +-------------------------------------------------------------------------------+   |
+|   |                    React 19 Frontend (Vite + Tailwind CSS)                     |   |
+|   |  - Responsive Dashboard Layout (Dark Mode / Glassmorphic UI)                  |   |
+|   |  - Real-time Reactive State Engine                                            |   |
+|   +-------------------------------------------------------------------------------+   |
+|                                         |                                              |
+|            +----------------------------+----------------------------+                 |
+|            |                            |                            |                 |
+|   +-----------------+          +-----------------+          +-----------------+        |
+|   |   UnitContext   |          |   CadContext    |          | ProjectContext  |        |
+|   |  Metric/Imperial|          | Three.js 2D/3D  |          | BOQ & Tracking  |        |
+|   +-----------------+          +-----------------+          +-----------------+        |
++---------------------------------------------------------------------------------------+
+                                         | REST API (JSON / HTTP)
+                                         v
++---------------------------------------------------------------------------------------+
+|                              EXPRESS.JS BACKEND ENGINE                                |
+|   +-------------------------------------------------------------------------------+   |
+|   |  Port: 5000 | Node.js Runtime | CORS Enabled | Modular Routing Architecture   |   |
+|   +-------------------------------------------------------------------------------+   |
+|     |                     |                    |                   |                  |
+|     v                     v                    v                   v                  v
+|  /api/core-materials   /api/structural     /api/finishing     /api/costing       /api/advanced
++---------------------------------------------------------------------------------------+</code></pre>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Technology</th>
+          <th>Version</th>
+          <th>Role & Responsibility</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Frontend Core</strong></td>
+          <td>React.js</td>
+          <td><code>^19.2.4</code></td>
+          <td>Component hierarchy, state orchestration, fast re-renders.</td>
+        </tr>
+        <tr>
+          <td><strong>Build Pipeline</strong></td>
+          <td>Vite</td>
+          <td><code>^8.0.1</code></td>
+          <td>Lightning-fast ESM development server and optimized bundle generator.</td>
+        </tr>
+        <tr>
+          <td><strong>CAD Engine</strong></td>
+          <td>Three.js</td>
+          <td><code>^0.183.2</code></td>
+          <td>WebGL rendering, geometric scene graph, 2D/3D vector manipulation.</td>
+        </tr>
+        <tr>
+          <td><strong>Design System</strong></td>
+          <td>Tailwind CSS</td>
+          <td><code>^3.4.1</code></td>
+          <td>Glassmorphism, custom engineering dark theme, micro-animations.</td>
+        </tr>
+        <tr>
+          <td><strong>Backend API</strong></td>
+          <td>Express.js / Node</td>
+          <td><code>v20.x</code></td>
+          <td>Modular REST micro-routes, material cost evaluations, BBS logic.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="page-break"></div>
+
+    <!-- Complete Modules Catalogue -->
+    <h2><span class="section-num">03</span> Engineering Modules & Features</h2>
+
+    <h3>1. CAD & Project Master</h3>
+    <ul>
+      <li><strong>AutoCAD Studio (<code>CadStudio.jsx</code>):</strong> Real-time 2D/3D drawing workspace featuring Point, Line, Polyline, Rectangle, Circle, Arc, Dimension, and Annotation tools with coordinate grid snapping and multi-layer management.</li>
+      <li><strong>Project Tracker (<code>ProjectTracker.jsx</code>):</strong> Milestone schedule management with Gantt charts, budget variance tracking, and task completion percentage.</li>
+      <li><strong>Project Master BOQ (<code>ProjectMasterBOQ.jsx</code>):</strong> Centralized bill of quantities compiling excavation, concrete, steel, masonry, and finishing estimates with one-click export.</li>
+      <li><strong>BBS Rebar Optimizer (<code>RebarCuttingOptimizer.jsx</code>):</strong> Dynamic linear cutting stock algorithm solving 1D bin-packing on 12-meter commercial stock lengths to slash off-cut scrap.</li>
+      <li><strong>IS 10262 Mix Design (<code>ConcreteMixDesignIS10262.jsx</code>):</strong> Implementation of Indian Standard IS 10262:2019 mix proportioning for M15 to M60 grades.</li>
+    </ul>
+
+    <h3>2. Core Construction Materials</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Module</th>
+          <th>Core Formula / Algorithm</th>
+          <th>Output Parameters</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Cement Calculator</strong></td>
+          <td>$$\text{Dry Vol} = \text{Wet Vol} \times 1.54$$ <br> $$\text{Bags} = \lceil (\text{Ratio} / \sum \text{Parts}) \times \text{Dry Vol} \times 1440 / 50 \rceil$$</td>
+          <td>Bag count (50kg), total dry mass (kg), cost.</td>
+        </tr>
+        <tr>
+          <td><strong>Sand Calculator</strong></td>
+          <td>$$\text{Adjusted Vol} = \text{Vol} \times (1 + \text{Bulking \%}/100)$$ <br> $$\text{Tons} = (\text{Adjusted Vol} \times 1550) / 1000$$</td>
+          <td>Bulked volume ($m^3$), dry weight (MT), Brass ($100\text{ cft}$).</td>
+        </tr>
+        <tr>
+          <td><strong>Aggregate Calculator</strong></td>
+          <td>$$\text{Gross Vol} = \text{Vol} \times \text{Compaction Factor (1.20)}$$ <br> $$\text{Weight} = (\text{Gross Vol} \times 1600) / 1000$$</td>
+          <td>Order volume ($m^3$), Tonnage (MT), truckloads.</td>
+        </tr>
+        <tr>
+          <td><strong>Bricks Calculator</strong></td>
+          <td>$$\text{Bricks} = \frac{\text{Net Wall Vol}}{\text{Nominal Brick Vol}} \times (1 + \text{Wastage \%})$$</td>
+          <td>Brick units count, dry mortar volume, cement & sand split.</td>
+        </tr>
+        <tr>
+          <td><strong>Steel Calculator</strong></td>
+          <td>$$W = \frac{D^2}{162.28}\text{ kg/m} \quad (\text{Imperial: } d^2/52.16\text{ lbs/ft})$$</td>
+          <td>Unit weight (kg/m), total weight (kg & MT), total cost.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3. Structural Elements Quantification</h3>
+    <ul>
+      <li><strong>Foundation (<code>FoundationCalculator.jsx</code>):</strong> Concrete volume, excavation boundary margins, base PCC leveling bed, and bottom mesh reinforcement.</li>
+      <li><strong>Excavation (<code>ExcavationCalculator.jsx</code>):</strong> Pit and trench excavations incorporating soil angle of repose (slope batter), swell factor, and backfill volume.</li>
+      <li><strong>Column (<code>ColumnCalculator.jsx</code>):</strong> Rectangular and circular columns, longitudinal vertical bars, lateral tie/spiral pitch, and shuttering formwork area.</li>
+      <li><strong>Slab (<code>SlabCalculator.jsx</code>):</strong> One-way and two-way structural slabs, main and distribution reinforcement, concrete wet volume.</li>
+      <li><strong>Beam (<code>BeamCalculator.jsx</code>):</strong> Clear span flexural members, top compression bars, bottom tension bars, 2-legged shear stirrups.</li>
+      <li><strong>Staircase (<code>StaircaseCalculator.jsx</code>):</strong> Waist slab inclination length, riser/tread volume, landing slabs, concrete and steel detailing.</li>
+    </ul>
+
+    <div class="page-break"></div>
+
+    <!-- Backend API Specification -->
+    <h2><span class="section-num">04</span> Backend REST API Specification</h2>
+    <p>All endpoints are mounted on <code>http://localhost:5000</code> and accept standard <code>application/json</code> payloads.</p>
+
+    <div class="math-box">
+      <span class="endpoint-badge badge-get">GET</span> <strong>/api/health</strong> — Server Health & Uptime Status
+    </div>
+
+    <div class="math-box">
+      <span class="endpoint-badge badge-post">POST</span> <strong>/api/core-materials/concrete</strong> — Grade Mix Breakdown
+    </div>
+    <pre><code>// Request Body:
+{
+  "wetVolumeM3": 25.0,
+  "mixRatio": [1, 1.5, 3],
+  "pricePerM3": 4500
+}
+
+// Response Body:
+{
+  "success": true,
+  "wetVolumeM3": 25.0,
+  "dryVol": "38.50",
+  "cementBags": 202,
+  "sandTons": "16.80",
+  "aggTons": "33.60",
+  "cost": "112500.00"
+}</code></pre>
+
+    <div class="math-box">
+      <span class="endpoint-badge badge-post">POST</span> <strong>/api/structural/column</strong> — Column Volume & Formwork
+    </div>
+    <pre><code>// Request Body:
+{
+  "length": 0.45,
+  "width": 0.45,
+  "height": 3.6,
+  "isCircular": false,
+  "count": 12,
+  "costPerCubicMeter": 4800
+}
+
+// Response Body:
+{
+  "success": true,
+  "volume": "8.75",
+  "cost": "41990.40"
+}</code></pre>
+
+    <div class="math-box">
+      <span class="endpoint-badge badge-post">POST</span> <strong>/api/advanced/rebar-bbs</strong> — Rebar Weight & BBS Sizing
+    </div>
+    <pre><code>// Request Body:
+{
+  "diaMm": 20,
+  "cuttingLenM": 6.5,
+  "numBars": 40,
+  "ratePerKg": 70
+}
+
+// Response Body:
+{
+  "success": true,
+  "unitWt": "2.469",
+  "totalWeightKg": "641.98",
+  "cost": "44938.27"
+}</code></pre>
+
+    <!-- Context & Architecture -->
+    <h2><span class="section-num">05</span> State Management Architecture</h2>
+    <p>CivisMetric V2 implements reactive, decoupled context providers ensuring that unit conversions, CAD vector operations, and project metadata sync seamlessly without re-render bottlenecks.</p>
+
+    <div class="card-grid">
+      <div class="stat-card accent">
+        <h4>UnitContext (Dual Units Matrix)</h4>
+        <p>Instant toggle between Metric (SI) and Imperial. Automatically recalculates all input boundaries, conversions, and unit labels in real-time.</p>
+      </div>
+      <div class="stat-card success">
+        <h4>CadContext (Vector & Scene Graph)</h4>
+        <p>Maintains Three.js 2D/3D entities, layers, active drafting tool, grid snap step, pan/zoom transformation, and undo/redo stacks.</p>
+      </div>
+      <div class="stat-card warning">
+        <h4>ProjectContext (Persistent State)</h4>
+        <p>Houses client details, milestone timelines, continuous BOQ aggregation, and synchronizes with browser LocalStorage.</p>
+      </div>
+    </div>
+
+    <!-- Installation & Setup -->
+    <h2><span class="section-num">06</span> Installation, Setup & Deployment Guide</h2>
+
+    <h3>1. Backend Setup</h3>
+    <pre><code>cd "d:\civis_metric  V2\engineering-backend"
+npm install
+node server.js
+# API Server active on http://localhost:5000</code></pre>
+
+    <h3>2. Frontend Setup</h3>
+    <pre><code>cd "d:\civis_metric  V2\my-engineering-dashboard"
+npm install
+npm run dev
+# Dashboard UI active on http://localhost:5173</code></pre>
+
+    <h3>3. Production Bundle Build</h3>
+    <pre><code>npm run build
+# Creates optimized production assets in dist/ directory</code></pre>
+
+    <!-- Footer -->
+    <div class="doc-footer">
+      <div>CivisMetric V2 &copy; 2026. All Rights Reserved. Engineered for Precision Civil & Structural Engineering.</div>
+      <div>Compliant with IS 456:2000, IS 10262:2019, IS 1200, SP 34, BS 8666, and ACI 318.</div>
+    </div>
+
+  </div>
+
+</body>
+</html>

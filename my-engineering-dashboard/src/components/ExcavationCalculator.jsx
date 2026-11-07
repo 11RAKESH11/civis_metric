@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useEffectEvent } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import disposeObject from '../lib/disposeObject';
 
 const unitToMeter = { 'm': 1, 'ft': 0.3048, 'in': 0.0254, 'cm': 0.01, 'mm': 0.001 };
 
@@ -12,13 +13,13 @@ const soilPresets = {
   muck: { name: "Wet Muck / Clay", swell: 30, shrink: 20, color: '#3b3c36', repose: 25 }
 };
 
-export default function ExcavationCalculator() {
+export default function ExcavationCalculator({ isProjectMode = false, onAddOn }) {
   const [inputs, setInputs] = useState({
     // Footprint
     excL: 30, excW: 15, excD: 6, unit: 'ft',
     // Engineering Tolerances
-    workingSpace: 2, // Extra space around foundation for workers
-    slopeAngle: 60, // Angle of repose (90 is vertical cut)
+    workingSpace: 2, 
+    slopeAngle: 60, 
     // Soil
     soilType: 'earth',
     swell: 25, shrink: 10,
@@ -50,7 +51,6 @@ export default function ExcavationCalculator() {
     let parsedValue = ['unit', 'soilType', 'currency'].includes(name) ? value : parseFloat(value) || 0;
     if (typeof parsedValue === 'number') parsedValue = Math.max(0, parsedValue);
     
-    // Cap slope angle to prevent breaking math
     if (name === 'slopeAngle') parsedValue = Math.min(90, Math.max(15, parsedValue));
 
     setInputs(prev => {
@@ -66,6 +66,24 @@ export default function ExcavationCalculator() {
 
   const handlePrint = () => window.print();
 
+  const handleAddOnToProject = () => {
+      if (onAddOn && results) {
+          onAddOn({
+              stepName: 'Excavation',
+              type: 'excavation',
+              inputs: { ...inputs },
+              results: { ...results },
+              cost: results.grandTotal
+          });
+      }
+  };
+
+  const triggerSimulation = () => {
+      if (animationDataRef.current.length > 0) {
+          animationDataRef.current.forEach(p => { p.t = -Math.random() * 2; });
+      }
+  };
+
   // --- Initialize 3D Scene ---
   useEffect(() => {
     const scene = new THREE.Scene();
@@ -78,20 +96,27 @@ export default function ExcavationCalculator() {
     const initialHeight = container.clientHeight || 500;
 
     const camera = new THREE.PerspectiveCamera(45, initialWidth / initialHeight, 0.1, 2000);
+    camera.position.set(15, 10, 15); // Safe default position
     cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.setSize(initialWidth, initialHeight);
     rendererRef.current = renderer;
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
+    // Wheel zoom only after the model is clicked, so scrolling over it scrolls the page;
+    // on touch, vertical drags keep scrolling the page.
+    controls.enableZoom = false;
+    renderer.domElement.style.touchAction = 'pan-y';
+    renderer.domElement.addEventListener('pointerdown', () => { controls.enableZoom = true; });
+    renderer.domElement.addEventListener('pointerleave', () => { controls.enableZoom = false; });
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI / 2 - 0.02; 
-    controls.autoRotate = true; 
+    // Full 360 degree rotation enabled!
+    controls.autoRotate = false; 
     controls.autoRotateSpeed = 0.4;
     controlsRef.current = controls;
 
@@ -124,7 +149,6 @@ export default function ExcavationCalculator() {
     const bed = new THREE.Mesh(new THREE.BoxGeometry(5, 2, 3.2), darkMat);
     bed.position.set(-1, 1.8, 0); bed.castShadow = true; truckGroup.add(bed);
     
-    // Wheels
     const wheelGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.6, 16);
     wheelGeo.rotateX(Math.PI/2);
     [[-1.5, 1.8], [-1.5, -1.8], [3, 1.8], [3, -1.8]].forEach(pos => {
@@ -144,24 +168,35 @@ export default function ExcavationCalculator() {
 
       // Flying Dirt Animation
       if (particlesRef.current && animationDataRef.current.length > 0) {
+        let particlesActive = false;
         animationDataRef.current.forEach((p, i) => {
           if (p.t < 1) {
+            particlesActive = true;
             p.t += p.speed;
-            if(p.t > 1) p.t = 1;
-            const currentX = p.startX + (p.endX - p.startX) * p.t;
-            const currentZ = p.startZ + (p.endZ - p.startZ) * p.t;
-            const height = Math.sin(p.t * Math.PI) * p.arcHeight;
-            const currentY = p.startY + (p.endY - p.startY) * p.t + height;
+            
+            if (p.t < 0) {
+                // Safely hide before animation starts
+                dummy.position.set(0, -9999, 0);
+                dummy.scale.setScalar(0.001);
+            } else {
+                let clampedT = Math.min(1, p.t);
+                const currentX = p.startX + (p.endX - p.startX) * clampedT;
+                const currentZ = p.startZ + (p.endZ - p.startZ) * clampedT;
+                const height = Math.sin(clampedT * Math.PI) * p.arcHeight;
+                const currentY = p.startY + (p.endY - p.startY) * clampedT + height;
 
-            dummy.position.set(currentX, currentY, currentZ);
-            dummy.rotation.set(p.t * Math.PI * 4, p.t * Math.PI * 2, 0);
-            dummy.scale.setScalar(p.scale);
+                dummy.position.set(currentX, currentY, currentZ);
+                dummy.rotation.set(clampedT * Math.PI * 4, clampedT * Math.PI * 2, 0);
+                dummy.scale.setScalar(p.scale);
+            }
+            
             dummy.updateMatrix();
             particlesRef.current.setMatrixAt(i, dummy.matrix);
           }
         });
-        particlesRef.current.instanceMatrix.needsUpdate = true;
+        if(particlesActive) particlesRef.current.instanceMatrix.needsUpdate = true;
       }
+      if (document.hidden || container.clientWidth === 0) return;
       renderer.render(scene, camera);
     };
     animate();
@@ -186,6 +221,7 @@ export default function ExcavationCalculator() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
       if (container && renderer.domElement) container.removeChild(renderer.domElement);
+      disposeObject(scene);
       renderer.dispose();
     };
   }, []);
@@ -206,13 +242,8 @@ export default function ExcavationCalculator() {
     }
   }, [mode]);
 
-  // --- Dynamic Core Calculation ---
-  useEffect(() => {
-    const handler = setTimeout(() => calculateAndRender(), 300);
-    return () => clearTimeout(handler);
-  }, [inputs, visualTheme]);
 
-  const calculateAndRender = () => {
+  function calculateAndRender() {
     const { excL, excW, excD, unit, workingSpace, slopeAngle, swell, shrink, truckCapacity, excavationRate, haulageRate } = inputs;
     const scene = sceneRef.current;
     if(!excL || !excW || !excD || !scene) return;
@@ -224,48 +255,47 @@ export default function ExcavationCalculator() {
     const d_m = excD * mult;
     const ws_m = workingSpace * mult;
 
-    // Geometry Math (Frustum of a Pyramid)
-    // 1. Bottom Dimensions (Foundation + Working Space on all sides)
+    // Geometry Math 
     const L_bot = foundationL + (ws_m * 2);
     const W_bot = foundationW + (ws_m * 2);
-
-    // 2. Top Dimensions (Based on Angle of Repose)
-    // tan(angle) = opposite(depth) / adjacent(horizontal run)
     const angleRad = slopeAngle * (Math.PI / 180);
     const horizontalRun = slopeAngle >= 90 ? 0 : d_m / Math.tan(angleRad);
-    
     const L_top = L_bot + (horizontalRun * 2);
     const W_top = W_bot + (horizontalRun * 2);
 
-    // 3. Prismoidal Formula for Bank Volume
     const A_bot = L_bot * W_bot;
     const A_top = L_top * W_top;
     const A_mid = ((L_bot + L_top) / 2) * ((W_bot + W_top) / 2);
-    
     const bankVol = (d_m / 6) * (A_bot + 4 * A_mid + A_top);
     
     // Swell & Shrink
     const looseVol = bankVol * (1 + (swell / 100));
     const compactedVol = bankVol * (1 - (shrink / 100));
 
-    const totalTrucks = Math.ceil(looseVol / truckCapacity);
+    // No truck capacity means trips can't be worked out; show 0 rather than Infinity.
+    const totalTrucks = truckCapacity > 0 ? Math.ceil(looseVol / truckCapacity) : 0;
     const costExcavation = bankVol * excavationRate;
     const costHauling = totalTrucks * haulageRate;
     const grandTotal = costExcavation + costHauling;
 
-    // --- 3D Scene Assembly ---
+    // --- 3D Scene Assembly with Saftey Cleanup ---
     const groundGroup = groundGroupRef.current;
-    while(groundGroup.children.length > 0){ 
-      const c = groundGroup.children[0];
+    
+    const toRemove = [];
+    groundGroup.children.forEach(c => toRemove.push(c));
+    toRemove.forEach(c => {
       groundGroup.remove(c); 
-      if(c.geometry) c.geometry.dispose();
+      disposeObject(c);
+    });
+    
+    if(particlesRef.current) { 
+        scene.remove(particlesRef.current); 
+        disposeObject(particlesRef.current); 
     }
-    if(particlesRef.current) { scene.remove(particlesRef.current); particlesRef.current.dispose(); }
 
     const isBlueprint = visualTheme === 'blueprint';
     const baseColor = soilPresets[inputs.soilType].color;
     
-    // Custom Material Function
     const getMat = (colorHex) => new THREE.MeshStandardMaterial({
         color: isBlueprint ? 0x0ea5e9 : colorHex,
         wireframe: isBlueprint,
@@ -274,7 +304,7 @@ export default function ExcavationCalculator() {
         roughness: 1, side: THREE.DoubleSide
     });
 
-    // 1. Ground Surface (Huge plane with a hole matching Top Dimensions)
+    // 1. Ground Surface 
     const terrainSize = Math.max(L_top, W_top) * 3;
     const shape = new THREE.Shape();
     shape.moveTo(-terrainSize/2, -terrainSize/2);
@@ -283,7 +313,7 @@ export default function ExcavationCalculator() {
     shape.lineTo(-terrainSize/2, terrainSize/2);
     shape.lineTo(-terrainSize/2, -terrainSize/2);
 
-    const hole = new THREE.Path(); // The top opening of the pit
+    const hole = new THREE.Path(); 
     hole.moveTo(-L_top/2, -W_top/2);
     hole.lineTo(L_top/2, -W_top/2);
     hole.lineTo(L_top/2, W_top/2);
@@ -293,7 +323,7 @@ export default function ExcavationCalculator() {
 
     const groundGeom = new THREE.ShapeGeometry(shape);
     groundGeom.rotateX(-Math.PI / 2);
-    const groundMesh = new THREE.Mesh(groundGeom, getMat('#3f4a30')); // Grassy dark top
+    const groundMesh = new THREE.Mesh(groundGeom, getMat('#3f4a30')); 
     groundMesh.receiveShadow = true;
     groundGroup.add(groundMesh);
 
@@ -305,7 +335,7 @@ export default function ExcavationCalculator() {
     floorMesh.receiveShadow = true;
     groundGroup.add(floorMesh);
 
-    // 3. Sloped Walls (Constructing Trapezoids via BufferGeometry)
+    // 3. Sloped Walls
     const buildWall = (p1, p2, p3, p4) => {
         const geom = new THREE.BufferGeometry();
         const verts = new Float32Array([...p1, ...p2, ...p3, ...p1, ...p3, ...p4]);
@@ -316,25 +346,20 @@ export default function ExcavationCalculator() {
         return mesh;
     };
     
-    // Coordinates (TopLeft, TopRight, BotRight, BotLeft)
-    // North Wall
     groundGroup.add(buildWall([-L_top/2, 0, -W_top/2], [L_top/2, 0, -W_top/2], [L_bot/2, -d_m, -W_bot/2], [-L_bot/2, -d_m, -W_bot/2]));
-    // South Wall
     groundGroup.add(buildWall([L_top/2, 0, W_top/2], [-L_top/2, 0, W_top/2], [-L_bot/2, -d_m, W_bot/2], [L_bot/2, -d_m, W_bot/2]));
-    // West Wall
     groundGroup.add(buildWall([-L_top/2, 0, W_top/2], [-L_top/2, 0, -W_top/2], [-L_bot/2, -d_m, -W_bot/2], [-L_bot/2, -d_m, W_bot/2]));
-    // East Wall
     groundGroup.add(buildWall([L_top/2, 0, -W_top/2], [L_top/2, 0, W_top/2], [L_bot/2, -d_m, W_bot/2], [L_bot/2, -d_m, -W_bot/2]));
 
-    // 4. Ghost Foundation (Shows the actual building footprint inside the pit)
+    // 4. Ghost Foundation
     const foundationGeom = new THREE.BoxGeometry(foundationL, 0.2, foundationW);
     const foundationMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee, wireframe: true, transparent: true, opacity: 0.8 });
     const foundationMesh = new THREE.Mesh(foundationGeom, foundationMat);
     foundationMesh.position.y = -d_m + 0.1;
     groundGroup.add(foundationMesh);
 
-    // --- Particle Animation (Flying Dirt & Stockpile) ---
-    const particleCount = Math.min(2000, Math.floor(looseVol * 5)); 
+    // --- Particle Animation Setup ---
+    const particleCount = Math.max(1, Math.min(2000, Math.floor(looseVol * 5))); 
     const pGeom = new THREE.BoxGeometry(0.4, 0.4, 0.4);
     const pMesh = new THREE.InstancedMesh(pGeom, getMat(baseColor), particleCount);
     pMesh.castShadow = !isBlueprint;
@@ -345,6 +370,7 @@ export default function ExcavationCalculator() {
     const pileRadius = Math.sqrt(looseVol) / 1.5;
     const pileCenterX = (L_top/2) + pileRadius + Math.max(2, horizontalRun);
     const pileCenterZ = 0;
+    const dummy = new THREE.Object3D();
 
     for(let i=0; i<particleCount; i++){
         const sx = (Math.random() - 0.5) * L_bot;
@@ -360,12 +386,19 @@ export default function ExcavationCalculator() {
         animData.push({
             startX: sx, startY: sy, startZ: sz,
             endX: ex, endY: Math.max(0.2, ey), endZ: ez,
-            t: -Math.random() * 2, 
+            t: 2, // Start finished
             speed: 0.01 + Math.random() * 0.015,
             arcHeight: 2 + Math.random() * 4 + d_m,
             scale: 0.4 + Math.random() * 1.2
         });
+        
+        // Hide securely underground
+        dummy.position.set(0, -9999, 0);
+        dummy.scale.setScalar(0.001);
+        dummy.updateMatrix();
+        pMesh.setMatrixAt(i, dummy.matrix);
     }
+    pMesh.instanceMatrix.needsUpdate = true;
     animationDataRef.current = animData;
 
     // Position the Dump Truck
@@ -385,236 +418,263 @@ export default function ExcavationCalculator() {
       L_bot, W_bot, L_top, W_top, A_bot, A_mid, A_top,
       bankVol, looseVol, compactedVol, totalTrucks, costExcavation, costHauling, grandTotal
     });
-  };
+  }
+
+  // Recalculate 300ms after the last input change.
+  const recalculate = useEffectEvent(() => calculateAndRender());
+  useEffect(() => {
+    const handler = setTimeout(() => recalculate(), 300);
+    return () => clearTimeout(handler);
+  }, [inputs, visualTheme]);
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 p-4 md:p-6 bg-[#020617] text-slate-100 min-h-screen relative overflow-hidden font-sans print:p-0 print:bg-white print:text-black print:overflow-visible print:min-h-0 print:block">
+    <div className="flex flex-col wide:flex-row gap-6 w-full h-full pb-6 text-ink font-sans print:p-0 print:bg-white print:text-black print:overflow-visible print:min-h-0 print:block">
       
-      {/* Background Glows */}
-      <div className="absolute top-[-10%] left-[-5%] w-[400px] h-[400px] bg-emerald-600/20 blur-[120px] rounded-full pointer-events-none print:hidden"></div>
-      <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-amber-600/10 blur-[150px] rounded-full pointer-events-none print:hidden"></div>
-
       {/* --- Left Panel: Settings --- */}
-      <div className="w-full xl:w-[380px] bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-2xl border border-slate-700/50 flex flex-col gap-4 z-10 relative h-auto xl:h-[88vh] overflow-hidden shrink-0 print:hidden">
+      <div className="w-full wide:w-[380px] bg-surface p-5 rounded-lg border border-line flex flex-col gap-4 z-10 relative h-auto wide:h-[calc(100vh-140px)] overflow-hidden shrink-0 print:hidden">
         
-        <div className="flex items-center justify-between pb-3 border-b border-slate-700/50 shrink-0">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/30 text-lg">🚜</div>
-                <div>
-                  <h2 className="text-lg font-black text-white tracking-wide leading-tight">EarthWorks Pro</h2>
-                  <p className="text-[9px] text-emerald-400 font-mono uppercase tracking-widest">Advanced Takeoff</p>
-                </div>
-            </div>
-            <select name="currency" value={inputs.currency} onChange={handleInputChange} className="bg-slate-800/80 border border-slate-600/50 rounded-lg py-1 px-2 text-xs outline-none focus:ring-1 focus:ring-emerald-500 text-emerald-400 font-bold transition-all cursor-pointer">
-                <option value="₹">₹ INR</option>
-                <option value="$">$ USD</option>
-                <option value="€">€ EUR</option>
-            </select>
+        <div className="flex items-center justify-between pb-3 border-b border-line shrink-0">
+            <h2 className="text-sm font-semibold text-ink">Inputs</h2>
+            <span className="text-xs text-muted font-medium whitespace-nowrap">Rates in ₹ INR</span>
         </div>
         
         <div className="overflow-y-auto custom-scroll pr-1 space-y-4 flex-1 pb-4">
             
             {/* Dimensions & Clearance */}
-            <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-emerald-500/30 transition-colors group">
+            <div className="p-4 rounded-lg border border-line">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 group-hover:text-emerald-400 transition-colors"><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>Structure Base</h3>
-                    <select name="unit" value={inputs.unit} onChange={handleInputChange} className="bg-slate-900/80 border border-slate-600/50 text-[10px] rounded-md px-1.5 py-1 outline-none text-white cursor-pointer focus:ring-1 focus:ring-emerald-500 transition-all">
+                    <h3 className="text-xs font-bold text-ink-2 flex items-center gap-2 transition-colors">Structure Base</h3>
+                    <select aria-label="Unit system" name="unit" value={inputs.unit} onChange={handleInputChange} className="bg-surface border border-line-control text-xs rounded px-1.5 py-1 outline-none text-ink cursor-pointer focus:ring-1 focus:ring-focus transition-all">
                         <option value="m">Meters</option>
                         <option value="ft">Feet</option>
                     </select>
                 </div>
-                <p className="text-[9px] text-slate-500 mb-2 italic">Actual Building Footprint</p>
+                <p className="text-xs text-muted mb-2 italic">Actual Building Footprint</p>
                 <div className="grid grid-cols-3 gap-2 mb-3">
                     <div>
-                      <label className="block text-[9px] text-slate-400 mb-1 uppercase">Length</label>
-                      <input type="number" step="0.1" name="excL" value={inputs.excL} onChange={handleInputChange} className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg p-2 text-xs focus:ring-1 focus:ring-emerald-500 outline-none text-white font-mono" />
+                      <label htmlFor="excavation-excL" className="block text-xs text-muted mb-1">Length</label>
+                      <input id="excavation-excL" type="number" step="0.1" name="excL" value={inputs.excL} onChange={handleInputChange} className="w-full bg-surface border border-line-control rounded p-2 text-xs focus:ring-1 focus:ring-focus outline-none text-ink font-mono" />
                     </div>
                     <div>
-                      <label className="block text-[9px] text-slate-400 mb-1 uppercase">Width</label>
-                      <input type="number" step="0.1" name="excW" value={inputs.excW} onChange={handleInputChange} className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg p-2 text-xs focus:ring-1 focus:ring-emerald-500 outline-none text-white font-mono" />
+                      <label htmlFor="excavation-excW" className="block text-xs text-muted mb-1">Width</label>
+                      <input id="excavation-excW" type="number" step="0.1" name="excW" value={inputs.excW} onChange={handleInputChange} className="w-full bg-surface border border-line-control rounded p-2 text-xs focus:ring-1 focus:ring-focus outline-none text-ink font-mono" />
                     </div>
                     <div>
-                      <label className="block text-[9px] text-slate-400 mb-1 uppercase">Depth</label>
-                      <input type="number" step="0.1" name="excD" value={inputs.excD} onChange={handleInputChange} className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg p-2 text-xs focus:ring-1 focus:ring-emerald-500 outline-none text-white font-mono" />
+                      <label htmlFor="excavation-excD" className="block text-xs text-muted mb-1">Depth</label>
+                      <input id="excavation-excD" type="number" step="0.1" name="excD" value={inputs.excD} onChange={handleInputChange} className="w-full bg-surface border border-line-control rounded p-2 text-xs focus:ring-1 focus:ring-focus outline-none text-ink font-mono" />
                     </div>
                 </div>
-                <div className="pt-3 border-t border-slate-700/50">
-                    <label className="flex justify-between items-center text-[10px] text-slate-300 uppercase mb-1">
+                <div className="pt-3 border-t border-line">
+                    <label htmlFor="excavation-workingSpace" className="flex justify-between items-center text-xs text-ink-2 mb-1">
                         <span>Working Space Clearance</span>
-                        <span className="text-cyan-500 font-mono text-[9px]">{inputs.unit} per side</span>
+                        <span className="text-primary font-mono text-xs">{inputs.unit} per side</span>
                     </label>
-                    <input type="number" step="0.5" name="workingSpace" value={inputs.workingSpace} onChange={handleInputChange} className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none text-cyan-400 font-bold transition-all" />
+                    <input id="excavation-workingSpace" type="number" step="0.5" name="workingSpace" value={inputs.workingSpace} onChange={handleInputChange} className="w-full bg-surface border border-line-control rounded p-2 text-xs focus:ring-1 focus:ring-focus outline-none text-primary font-bold transition-all" />
                 </div>
             </div>
 
             {/* Soil Type & Slopes */}
-            <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-amber-500/30 transition-colors group">
+            <div className="p-4 rounded-lg border border-line">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 group-hover:text-amber-400 transition-colors"><span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]"></span>Soil Dynamics</h3>
-                    <select name="soilType" value={inputs.soilType} onChange={handleInputChange} className="bg-slate-900/80 border border-slate-600/50 text-[10px] rounded-md px-1.5 py-1 outline-none text-white cursor-pointer focus:ring-1 focus:ring-amber-500 transition-all max-w-[100px] truncate">
+                    <h3 className="text-xs font-bold text-ink-2 flex items-center gap-2 transition-colors">Soil Dynamics</h3>
+                    <select aria-label="Soil type" name="soilType" value={inputs.soilType} onChange={handleInputChange} className="bg-surface border border-line-control text-xs rounded px-1.5 py-1 outline-none text-ink cursor-pointer focus:ring-1 focus:ring-focus transition-all max-w-[100px] truncate">
                         {Object.entries(soilPresets).map(([key, data]) => (<option key={key} value={key}>{data.name}</option>))}
                     </select>
                 </div>
                 
                 <div className="mb-3">
-                    <label className="flex justify-between items-center text-[10px] text-slate-400 mb-1 uppercase">
+                    <label htmlFor="excavation-slopeAngle" className="flex justify-between items-center text-xs text-muted mb-1">
                         <span>Safe Slope (Angle of Repose)</span>
-                        <span className="text-rose-400 font-mono text-[9px]">{inputs.slopeAngle}° Degrees</span>
+                        <span className="text-error font-mono text-xs">{inputs.slopeAngle}° Degrees</span>
                     </label>
-                    <input type="range" name="slopeAngle" min="15" max="90" step="5" value={inputs.slopeAngle} onChange={handleInputChange} className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-500" />
-                    <div className="flex justify-between text-[8px] text-slate-500 mt-1 uppercase font-bold"><span>15° (Flat)</span><span>90° (Vertical)</span></div>
+                    <input id="excavation-slopeAngle" type="range" name="slopeAngle" min="15" max="90" step="5" value={inputs.slopeAngle} onChange={handleInputChange} className="w-full h-1.5 bg-line rounded appearance-none cursor-pointer accent-primary" />
+                    <div className="flex justify-between text-xs text-muted mt-1 font-bold"><span>15° (Flat)</span><span>90° (Vertical)</span></div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-700/50">
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-line">
                     <div>
-                        <label className="block text-[9px] text-slate-400 mb-1 uppercase text-amber-400/80">Swell (Loose)</label>
-                        <div className="flex items-center bg-slate-900/80 border border-slate-700/80 rounded-lg pr-2 focus-within:ring-1 focus-within:ring-amber-500">
-                            <input type="number" name="swell" value={inputs.swell} onChange={handleInputChange} className="w-full bg-transparent p-2 text-xs outline-none text-white font-mono" />
-                            <span className="text-slate-500 text-xs">%</span>
+                        <label htmlFor="excavation-swell" className="block text-xs text-muted mb-1">Swell (Loose)</label>
+                        <div className="flex items-center bg-surface border border-line rounded-lg pr-2 focus-within:ring-1 focus-within:ring-focus">
+                            <input id="excavation-swell" type="number" name="swell" value={inputs.swell} onChange={handleInputChange} className="w-full bg-transparent p-2 text-xs outline-none text-ink font-mono" />
+                            <span className="text-muted text-xs">%</span>
                         </div>
                     </div>
                     <div>
-                        <label className="block text-[9px] text-slate-400 mb-1 uppercase text-indigo-400/80">Shrink (Fill)</label>
-                        <div className="flex items-center bg-slate-900/80 border border-slate-700/80 rounded-lg pr-2 focus-within:ring-1 focus-within:ring-indigo-500">
-                            <input type="number" name="shrink" value={inputs.shrink} onChange={handleInputChange} className="w-full bg-transparent p-2 text-xs outline-none text-white font-mono" />
-                            <span className="text-slate-500 text-xs">%</span>
+                        <label htmlFor="excavation-shrink" className="block text-xs text-muted mb-1">Shrink (Fill)</label>
+                        <div className="flex items-center bg-surface border border-line rounded-lg pr-2 focus-within:ring-1 focus-within:ring-focus">
+                            <input id="excavation-shrink" type="number" name="shrink" value={inputs.shrink} onChange={handleInputChange} className="w-full bg-transparent p-2 text-xs outline-none text-ink font-mono" />
+                            <span className="text-muted text-xs">%</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Financial Rates */}
-            <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-blue-500/30 transition-colors group mb-2">
-                <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2 group-hover:text-blue-400 transition-colors"><span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></span>Operations & Cost</h3>
+            <div className="p-4 rounded-lg border border-line mb-2">
+                <h3 className="text-xs font-bold text-ink-2 mb-3 flex items-center gap-2 transition-colors">Operations & Cost</h3>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                      <span className="text-[11px] text-slate-400 font-medium ml-1">Dump Truck Capacity</span>
-                      <div className="flex items-center bg-slate-800 rounded text-xs px-2 border border-slate-600/50">
-                          <input type="number" name="truckCapacity" value={inputs.truckCapacity} onChange={handleInputChange} className="w-10 bg-transparent p-1 text-right outline-none text-white font-mono" />
-                          <span className="text-slate-500 ml-1 text-[9px]">m³</span>
+                  <div className="flex items-center justify-between bg-surface p-2 rounded-lg border border-line">
+                      <span className="text-xs text-muted font-medium ml-1">Dump Truck Capacity</span>
+                      <div className="flex items-center bg-sunken rounded text-xs px-2 border border-line-control">
+                          <input aria-label="Dump Truck Capacity" type="number" name="truckCapacity" value={inputs.truckCapacity} onChange={handleInputChange} className="w-10 bg-transparent p-1 text-right outline-none text-ink font-mono" />
+                          <span className="text-muted ml-1 text-xs">m³</span>
                       </div>
                   </div>
-                  <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                      <span className="text-[11px] text-slate-400 font-medium ml-1">Digging (per Bank m³)</span>
-                      <div className="flex items-center bg-slate-800 rounded text-xs px-2 border border-slate-600/50">
-                          <span className="text-blue-400">{inputs.currency}</span>
-                          <input type="number" name="excavationRate" value={inputs.excavationRate} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-white font-mono" />
+                  <div className="flex items-center justify-between bg-surface p-2 rounded-lg border border-line">
+                      <span className="text-xs text-muted font-medium ml-1">Digging (per Bank m³)</span>
+                      <div className="flex items-center bg-sunken rounded text-xs px-2 border border-line-control">
+                          <span className="text-primary">{inputs.currency}</span>
+                          <input aria-label="Excavation rate" type="number" name="excavationRate" value={inputs.excavationRate} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-ink font-mono" />
                       </div>
                   </div>
-                  <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                      <span className="text-[11px] text-slate-400 font-medium ml-1">Haulage (per Truck)</span>
-                      <div className="flex items-center bg-slate-800 rounded text-xs px-2 border border-slate-600/50">
-                          <span className="text-blue-400">{inputs.currency}</span>
-                          <input type="number" name="haulageRate" value={inputs.haulageRate} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-white font-mono" />
+                  <div className="flex items-center justify-between bg-surface p-2 rounded-lg border border-line">
+                      <span className="text-xs text-muted font-medium ml-1">Haulage (per Truck)</span>
+                      <div className="flex items-center bg-sunken rounded text-xs px-2 border border-line-control">
+                          <span className="text-primary">{inputs.currency}</span>
+                          <input aria-label="Haulage (per Truck)" type="number" name="haulageRate" value={inputs.haulageRate} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-ink font-mono" />
                       </div>
                   </div>
                 </div>
             </div>
+
+            {/* ONLY SHOW THIS BUTTON IF WE ARE IN A PROJECT WORKSPACE */}
+            {isProjectMode && (
+              <div className="mt-4 pt-4 border-t border-line">
+                  <button 
+                      onClick={handleAddOnToProject}
+                      className="w-full bg-primary text-on-primary font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 text-xs"
+                  >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Excavation to Project
+                  </button>
+              </div>
+            )}
         </div>
       </div>
 
+      {results && (
+        <div className="wide:hidden sticky bottom-0 lg:-bottom-8 z-30 -mx-4 sm:-mx-6 lg:-mx-8 -my-3 px-4 sm:px-6 lg:px-8 py-3 bg-surface border-y border-line print:hidden" aria-live="polite">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                       <div className="flex flex-col">
+                           <span className="text-xs text-muted font-bold">Total Trucks</span>
+                           <span className="text-lg font-semibold text-ink leading-none">{results.totalTrucks} Trips</span>
+                       </div>
+                       <div className="w-px h-8 bg-line"></div>
+                       <div className="flex flex-col">
+                           <span className="text-xs text-muted font-bold">Est. Cost</span>
+                           <span className="text-lg font-semibold text-ink leading-none">{inputs.currency}{results.grandTotal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</span>
+                       </div>
+                    </div>
+        </div>
+      )}
+
       {/* --- Right Panel: Viewer & Report --- */}
-      <div className="w-full xl:w-[calc(100%-404px)] bg-slate-900/40 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-700/50 flex flex-col overflow-hidden relative z-10 xl:h-[88vh] print:w-full print:h-auto print:border-none print:shadow-none print:bg-transparent print:overflow-visible print:block">
+      <div className="w-full wide:w-[calc(100%-404px)] bg-surface rounded-lg border border-line flex flex-col overflow-hidden relative z-10 wide:h-[calc(100vh-140px)] print:w-full print:h-auto print:border-none print:shadow-none print:bg-transparent print:overflow-visible print:block">
         
         {/* Unified Top Toolbar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-4 border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-md z-30 shrink-0 print:hidden">
-            <div className="flex-1 h-10 flex items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-4 border-b border-line bg-surface z-30 shrink-0 print:hidden">
+            <div className="flex-1 min-h-10 flex items-center">
                 {results && mode === 'normal' ? (
-                    <div className="flex items-center gap-4 animate-fade-in">
+                    <div className="hidden wide:flex flex-wrap items-center gap-x-4 gap-y-1">
                        <div className="flex flex-col">
-                           <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Total Trucks</span>
-                           <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600 leading-none">{results.totalTrucks} Trips</span>
+                           <span className="text-xs text-muted font-bold">Total Trucks</span>
+                           <span className="text-lg font-semibold text-ink leading-none">{results.totalTrucks} Trips</span>
                        </div>
-                       <div className="w-px h-8 bg-slate-700"></div>
+                       <div className="w-px h-8 bg-line"></div>
                        <div className="flex flex-col">
-                           <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Est. Cost</span>
-                           <span className="text-lg font-black text-emerald-400 leading-none">{inputs.currency}{results.grandTotal.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
+                           <span className="text-xs text-muted font-bold">Est. Cost</span>
+                           <span className="text-lg font-semibold text-ink leading-none">{inputs.currency}{results.grandTotal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</span>
                        </div>
                     </div>
                 ) : mode === 'civil' ? (
-                    <h2 className="text-lg font-bold text-white uppercase tracking-widest">Financial Takeoff</h2>
+                    <h2 className="text-lg font-bold text-ink">Financial Takeoff</h2>
                 ) : mode === 'math' ? (
-                    <h2 className="text-lg font-bold text-white uppercase tracking-widest">Advanced Mathematics</h2>
+                    <h2 className="text-lg font-bold text-ink">Advanced Mathematics</h2>
                 ) : null}
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
                 {(mode === 'civil' || mode === 'math') && (
-                    <button onClick={handlePrint} className="bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/50 hover:border-emerald-500 text-emerald-400 hover:text-slate-900 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)] hover:shadow-[0_0_15px_rgba(16,185,129,0.4)] flex items-center gap-2">
+                    <button onClick={handlePrint} className="bg-sunken hover:bg-primary border border-line-control hover:border-primary text-ink hover:text-on-primary px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2">
                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg> Print
                     </button>
                 )}
 
-                <div className="bg-slate-800/90 p-1 rounded-xl border border-slate-700/50 flex gap-1 shadow-inner">
-                    <button onClick={() => setMode('normal')} className={`px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${mode === 'normal' ? 'bg-emerald-500 text-slate-900 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'text-slate-400 hover:text-white'}`}>3D Vis</button>
-                    <button onClick={() => setMode('math')} className={`px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${mode === 'math' ? 'bg-blue-500 text-slate-900 shadow-[0_0_10px_rgba(59,130,246,0.4)]' : 'text-slate-400 hover:text-white'}`}>Math</button>
-                    <button onClick={() => setMode('civil')} className={`px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${mode === 'civil' ? 'bg-amber-500 text-slate-900 shadow-[0_0_10px_rgba(245,158,11,0.4)]' : 'text-slate-400 hover:text-white'}`}>Report</button>
+                <div className="bg-sunken p-1 rounded-lg border border-line flex gap-1">
+                    <button onClick={() => setMode('normal')} className={`px-3 py-2 rounded-lg text-xs font-bold   transition-all duration-300 ${mode === 'normal' ? 'bg-primary text-on-primary' : 'text-muted hover:text-ink'}`}>3D Vis</button>
+                    <button onClick={() => setMode('math')} className={`px-3 py-2 rounded-lg text-xs font-bold   transition-all duration-300 ${mode === 'math' ? 'bg-primary text-on-primary' : 'text-muted hover:text-ink'}`}>Math</button>
+                    <button onClick={() => setMode('civil')} className={`px-3 py-2 rounded-lg text-xs font-bold   transition-all duration-300 ${mode === 'civil' ? 'bg-primary text-on-primary' : 'text-muted hover:text-ink'}`}>Report</button>
                 </div>
             </div>
         </div>
 
         {/* 3D Canvas View */}
-        <div className={`${mode === 'normal' ? 'flex' : 'hidden'} flex-1 relative min-h-[500px] w-full overflow-hidden bg-gradient-to-b from-slate-900/50 to-[#020617] group print:hidden`}>
-            <div ref={mountRef} className="absolute inset-0 cursor-move"></div>
+        <div className={`${mode === 'normal' ? 'flex' : 'hidden'} flex-1 relative min-h-[500px] w-full overflow-hidden bg-[#14171B] group print:hidden`}>
+            <div ref={mountRef} className="absolute inset-0 cursor-move" role="img" aria-label="3D model of the current inputs. All quantities are listed in the Math and Report views."></div>
             
-            <div className="absolute bottom-6 right-6 z-30 bg-slate-800/80 backdrop-blur-md p-1 rounded-xl border border-slate-700/50 flex gap-1 shadow-xl">
-                <button onClick={() => setVisualTheme('realistic')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${visualTheme === 'realistic' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50' : 'text-slate-500 hover:text-slate-300'}`}>Realistic</button>
-                <button onClick={() => setVisualTheme('blueprint')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${visualTheme === 'blueprint' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-slate-500 hover:text-slate-300'}`}>Wireframe</button>
+            <div className="absolute bottom-6 right-6 z-30 bg-sunken p-1 rounded-lg border border-line flex gap-1">
+                <button onClick={triggerSimulation} className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-sunken text-ink border border-line-control hover:bg-primary hover:text-on-primary mr-2 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path></svg> Simulate Dig
+                </button>
+                <button onClick={() => setVisualTheme('realistic')} className={`px-3 py-1.5 rounded-lg text-xs font-bold  transition-all ${visualTheme === 'realistic' ? 'bg-sunken text-ink border border-line-control' : 'text-muted hover:text-ink-2'}`}>Realistic</button>
+                <button onClick={() => setVisualTheme('blueprint')} className={`px-3 py-1.5 rounded-lg text-xs font-bold  transition-all ${visualTheme === 'blueprint' ? 'bg-sunken text-primary border border-line-control' : 'text-muted hover:text-ink-2'}`}>Wireframe</button>
             </div>
         </div>
 
         {/* --- Engineering Math View --- */}
         {results && mode === 'math' && (
-           <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 bg-slate-50 text-slate-800 print:bg-white print:text-black print:overflow-visible print:h-auto print:w-full print:block">
-              <div className="border-b-2 border-slate-200 pb-6 mb-8 print:border-black">
-                  <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Frustum Calculations</h1>
-                  <p className="text-sm text-slate-500 mt-1 font-mono">Advanced Geometry & Prismoidal Method (Base: Meters)</p>
+           <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 bg-bg text-ink print:bg-white print:text-black print:overflow-visible print:h-auto print:w-full print:block">
+              <div className="border-b-2 border-line pb-6 mb-8 print:border-black">
+                  <h2 className="text-3xl font-semibold text-ink tracking-tight">Frustum Calculations</h2>
+                  <p className="text-sm text-muted mt-1 font-mono">Advanced Geometry & Prismoidal Method (Base: Meters)</p>
               </div>
 
               <div className="space-y-8 max-w-4xl mx-auto">
                  {/* Step 1 */}
-                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
-                    <h3 className="text-lg font-bold text-cyan-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 1: Pit Dimensions & Clearances</h3>
-                    <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
-                        <p className="text-xs text-slate-500 italic print:text-black">// The bottom of the pit includes the foundation PLUS working space on all sides.</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Bottom Length (L_bot)</span> = Foundation L + (2 × Working Space)</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">L_bot</span> = {results.foundationL.toFixed(3)} + (2 × {results.ws_m.toFixed(3)}) = <span className="font-bold text-slate-900">{results.L_bot.toFixed(3)} m</span></p>
+                 <div className="bg-surface border border-line rounded-lg p-6 print:shadow-none print:border-black print:border-2">
+                    <h3 className="text-lg font-bold text-ink border-b border-line pb-3 mb-4 print:text-black">Step 1: Pit Dimensions & Clearances</h3>
+                    <div className="font-mono text-sm space-y-3 text-ink-2 bg-bg p-4 rounded-lg print:bg-transparent print:p-0">
+                        <p className="text-xs text-muted italic print:text-black">// The bottom of the pit includes the foundation PLUS working space on all sides.</p>
+                        <p><span className="text-muted print:text-black font-bold">Bottom Length (L_bot)</span> = Foundation L + (2 × Working Space)</p>
+                        <p><span className="text-muted print:text-black font-bold">L_bot</span> = {results.foundationL.toFixed(3)} + (2 × {results.ws_m.toFixed(3)}) = <span className="font-bold text-ink">{results.L_bot.toFixed(3)} m</span></p>
                         
-                        <p><span className="text-slate-400 print:text-black font-bold">Bottom Width (W_bot)</span> = Foundation W + (2 × Working Space)</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">W_bot</span> = {results.foundationW.toFixed(3)} + (2 × {results.ws_m.toFixed(3)}) = <span className="font-bold text-slate-900">{results.W_bot.toFixed(3)} m</span></p>
+                        <p><span className="text-muted print:text-black font-bold">Bottom Width (W_bot)</span> = Foundation W + (2 × Working Space)</p>
+                        <p><span className="text-muted print:text-black font-bold">W_bot</span> = {results.foundationW.toFixed(3)} + (2 × {results.ws_m.toFixed(3)}) = <span className="font-bold text-ink">{results.W_bot.toFixed(3)} m</span></p>
                         <br/>
-                        <p className="text-xs text-slate-500 italic print:text-black">// The top of the pit is wider due to the safe cut slope (Angle of Repose).</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Horizontal Run</span> = Depth / tan({inputs.slopeAngle}°) = <span className="font-bold text-slate-900">{results.horizontalRun.toFixed(3)} m</span> per side</p>
+                        <p className="text-xs text-muted italic print:text-black">// The top of the pit is wider due to the safe cut slope (Angle of Repose).</p>
+                        <p><span className="text-muted print:text-black font-bold">Horizontal Run</span> = Depth / tan({inputs.slopeAngle}°) = <span className="font-bold text-ink">{results.horizontalRun.toFixed(3)} m</span> per side</p>
                         
-                        <p><span className="text-slate-400 print:text-black font-bold">Top Length (L_top)</span> = L_bot + (2 × Horizontal Run) = <span className="font-bold text-slate-900">{results.L_top.toFixed(3)} m</span></p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Top Width (W_top)</span> = W_bot + (2 × Horizontal Run) = <span className="font-bold text-slate-900">{results.W_top.toFixed(3)} m</span></p>
+                        <p><span className="text-muted print:text-black font-bold">Top Length (L_top)</span> = L_bot + (2 × Horizontal Run) = <span className="font-bold text-ink">{results.L_top.toFixed(3)} m</span></p>
+                        <p><span className="text-muted print:text-black font-bold">Top Width (W_top)</span> = W_bot + (2 × Horizontal Run) = <span className="font-bold text-ink">{results.W_top.toFixed(3)} m</span></p>
                     </div>
                  </div>
 
                  {/* Step 2 */}
-                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
-                    <h3 className="text-lg font-bold text-emerald-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 2: Prismoidal Volume (Simpson's Rule)</h3>
-                    <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
-                        <p className="text-xs text-slate-500 italic print:text-black">// A sloped pit is an inverted frustum. Standard length × width × depth is inaccurate here.</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Bottom Area (A_bot)</span> = {results.L_bot.toFixed(3)} × {results.W_bot.toFixed(3)} = <span className="font-bold text-slate-900">{results.A_bot.toFixed(3)} m²</span></p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Top Area (A_top)</span> = {results.L_top.toFixed(3)} × {results.W_top.toFixed(3)} = <span className="font-bold text-slate-900">{results.A_top.toFixed(3)} m²</span></p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Mid Area (A_mid)</span> = Mean L × Mean W = <span className="font-bold text-slate-900">{results.A_mid.toFixed(3)} m²</span></p>
+                 <div className="bg-surface border border-line rounded-lg p-6 print:shadow-none print:border-black print:border-2">
+                    <h3 className="text-lg font-bold text-ink border-b border-line pb-3 mb-4 print:text-black">Step 2: Prismoidal Volume (Simpson's Rule)</h3>
+                    <div className="font-mono text-sm space-y-3 text-ink-2 bg-bg p-4 rounded-lg print:bg-transparent print:p-0">
+                        <p className="text-xs text-muted italic print:text-black">// A sloped pit is an inverted frustum. Standard length × width × depth is inaccurate here.</p>
+                        <p><span className="text-muted print:text-black font-bold">Bottom Area (A_bot)</span> = {results.L_bot.toFixed(3)} × {results.W_bot.toFixed(3)} = <span className="font-bold text-ink">{results.A_bot.toFixed(3)} m²</span></p>
+                        <p><span className="text-muted print:text-black font-bold">Top Area (A_top)</span> = {results.L_top.toFixed(3)} × {results.W_top.toFixed(3)} = <span className="font-bold text-ink">{results.A_top.toFixed(3)} m²</span></p>
+                        <p><span className="text-muted print:text-black font-bold">Mid Area (A_mid)</span> = Mean L × Mean W = <span className="font-bold text-ink">{results.A_mid.toFixed(3)} m²</span></p>
                         <br/>
-                        <p><span className="text-slate-400 print:text-black font-bold">Prismoidal Formula:</span> V = (Depth / 6) × [ A_bot + 4(A_mid) + A_top ]</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Substitutions:</span> V = ({results.d_m.toFixed(2)} / 6) × [ {results.A_bot.toFixed(2)} + 4({results.A_mid.toFixed(2)}) + {results.A_top.toFixed(2)} ]</p>
-                        <p className="text-emerald-700 print:text-black font-bold text-lg mt-2">Bank Volume = {results.bankVol.toFixed(3)} m³</p>
+                        <p><span className="text-muted print:text-black font-bold">Prismoidal Formula:</span> V = (Depth / 6) × [ A_bot + 4(A_mid) + A_top ]</p>
+                        <p><span className="text-muted print:text-black font-bold">Substitutions:</span> V = ({results.d_m.toFixed(2)} / 6) × [ {results.A_bot.toFixed(2)} + 4({results.A_mid.toFixed(2)}) + {results.A_top.toFixed(2)} ]</p>
+                        <p className="text-ink print:text-black font-bold text-lg mt-2">Bank Volume = {results.bankVol.toFixed(3)} m³</p>
                     </div>
                  </div>
 
                  {/* Step 3 */}
-                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
-                    <h3 className="text-lg font-bold text-amber-600 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 3: Soil Dynamics (Swell / Shrink)</h3>
-                    <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
-                        <p className="text-xs text-slate-500 italic print:text-black">// Swell determines the loose volume transported by trucks.</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Loose Volume</span> = Bank Volume × (1 + {inputs.swell}%) = <span className="font-bold text-amber-600">{results.looseVol.toFixed(3)} m³</span></p>
+                 <div className="bg-surface border border-line rounded-lg p-6 print:shadow-none print:border-black print:border-2">
+                    <h3 className="text-lg font-bold text-accent border-b border-line pb-3 mb-4 print:text-black">Step 3: Soil Dynamics (Swell / Shrink)</h3>
+                    <div className="font-mono text-sm space-y-3 text-ink-2 bg-bg p-4 rounded-lg print:bg-transparent print:p-0">
+                        <p className="text-xs text-muted italic print:text-black">// Swell determines the loose volume transported by trucks.</p>
+                        <p><span className="text-muted print:text-black font-bold">Loose Volume</span> = Bank Volume × (1 + {inputs.swell}%) = <span className="font-bold text-accent">{results.looseVol.toFixed(3)} m³</span></p>
                         <br/>
-                        <p className="text-xs text-slate-500 italic print:text-black">// Shrink determines the compacted volume if reused as backfill.</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Compacted Volume</span> = Bank Volume × (1 - {inputs.shrink}%) = <span className="font-bold text-indigo-600">{results.compactedVol.toFixed(3)} m³</span></p>
+                        <p className="text-xs text-muted italic print:text-black">// Shrink determines the compacted volume if reused as backfill.</p>
+                        <p><span className="text-muted print:text-black font-bold">Compacted Volume</span> = Bank Volume × (1 - {inputs.shrink}%) = <span className="font-bold text-primary">{results.compactedVol.toFixed(3)} m³</span></p>
                     </div>
                  </div>
               </div>
@@ -623,74 +683,74 @@ export default function ExcavationCalculator() {
 
         {/* Detailed Financial Report View */}
         {results && mode === 'civil' && (
-          <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden relative animate-fade-in print:bg-white print:p-0 print:overflow-visible print:h-auto print:block">
-            <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 bg-slate-50 text-slate-800 print:text-black print:p-0 print:overflow-visible print:h-auto print:w-full">
+          <div className="flex-1 flex flex-col bg-bg overflow-hidden relative animate-fade-in print:bg-white print:p-0 print:overflow-visible print:h-auto print:block">
+            <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 bg-bg text-ink print:text-black print:p-0 print:overflow-visible print:h-auto print:w-full">
                 
-                <div className="border-b-2 border-slate-200 pb-6 mb-8 flex justify-between items-end">
+                <div className="border-b-2 border-line pb-6 mb-8 flex justify-between items-end">
                     <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Excavation Takeoff</h1>
-                        <p className="text-sm text-slate-500 mt-1 font-mono">Generated by CivisMetric Engine</p>
+                        <h2 className="text-3xl font-semibold text-ink tracking-tight">Excavation Takeoff</h2>
+                        <p className="text-sm text-muted mt-1 font-mono">Generated by CivisMetric Engine</p>
                     </div>
                     <div className="text-right">
-                        <p className="text-xs text-slate-400 uppercase font-bold tracking-widest print:text-black">Grand Total</p>
-                        <p className="text-4xl font-black text-emerald-600 font-mono print:text-black">{inputs.currency}{results.grandTotal.toLocaleString('en-US', {maximumFractionDigits: 0})}</p>
+                        <p className="text-xs text-muted font-bold print:text-black">Grand Total</p>
+                        <p className="text-4xl font-semibold text-ink font-mono print:text-black">{inputs.currency}{results.grandTotal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</p>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 print:block">
                     <div className="print:mb-6">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1 print:text-black">Geometric Data</h3>
+                        <h3 className="text-xs font-bold text-muted mb-3 border-b border-line pb-1 print:text-black">Geometric Data</h3>
                         <table className="w-full text-sm">
                             <tbody>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Structure Footprint</td><td className="py-2 font-medium text-right">{inputs.excL}×{inputs.excW} {inputs.unit}</td></tr>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Working Space Added</td><td className="py-2 font-medium text-right text-emerald-600 print:text-black">+ {inputs.workingSpace} {inputs.unit} per side</td></tr>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Cut Slope (Angle)</td><td className="py-2 font-medium text-right text-rose-500 print:text-black">{inputs.slopeAngle}° Degrees</td></tr>
-                                <tr><td className="py-2 text-slate-500 print:text-black">Top Surface Cut Area</td><td className="py-2 font-medium text-right">{results.A_top.toFixed(2)} m²</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Structure Footprint</th><td className="py-2 font-medium text-right">{inputs.excL}×{inputs.excW} {inputs.unit}</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Working Space Added</th><td className="py-2 font-medium text-right text-ink print:text-black">+ {inputs.workingSpace} {inputs.unit} per side</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Cut Slope (Angle)</th><td className="py-2 font-medium text-right text-ink print:text-black">{inputs.slopeAngle}° Degrees</td></tr>
+                                <tr><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Top Surface Cut Area</th><td className="py-2 font-medium text-right">{results.A_top.toFixed(2)} m²</td></tr>
                             </tbody>
                         </table>
                     </div>
                     <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1 print:text-black">Volumetrics & Logistics</h3>
+                        <h3 className="text-xs font-bold text-muted mb-3 border-b border-line pb-1 print:text-black">Volumetrics & Logistics</h3>
                         <table className="w-full text-sm">
                             <tbody>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 font-bold text-slate-800 print:text-black">Bank Volume (Raw Space)</td><td className="py-2 font-black text-right text-slate-900">{results.bankVol.toFixed(2)} m³</td></tr>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Loose Volume (+{inputs.swell}% Swell)</td><td className="py-2 font-medium text-right text-amber-600 print:text-black">{results.looseVol.toFixed(2)} m³</td></tr>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Compacted Vol (-{inputs.shrink}% Shrink)</td><td className="py-2 font-medium text-right text-indigo-600 print:text-black">{results.compactedVol.toFixed(2)} m³</td></tr>
-                                <tr><td className="py-2 text-slate-500 print:text-black">Total Truck Trips Req.</td><td className="py-2 font-bold text-right text-blue-600 print:text-black">{results.totalTrucks} Trips</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left font-bold text-ink print:text-black">Bank Volume (Raw Space)</th><td className="py-2 font-semibold text-right text-ink">{results.bankVol.toFixed(2)} m³</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Loose Volume (+{inputs.swell}% Swell)</th><td className="py-2 font-medium text-right text-accent print:text-black">{results.looseVol.toFixed(2)} m³</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Compacted Vol (-{inputs.shrink}% Shrink)</th><td className="py-2 font-medium text-right text-primary print:text-black">{results.compactedVol.toFixed(2)} m³</td></tr>
+                                <tr><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Total Truck Trips Req.</th><td className="py-2 font-bold text-right text-primary print:text-black">{results.totalTrucks} Trips</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1 print:text-black">Itemized Estimate</h3>
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-8 print:border-black print:shadow-none">
+                <h3 className="text-xs font-bold text-muted mb-3 border-b border-line pb-1 print:text-black">Itemized Estimate</h3>
+                <div className="bg-surface border border-line rounded-lg overflow-hidden mb-8 print:border-black print:shadow-none">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider print:bg-transparent print:text-black print:border-b print:border-black">
+                        <thead className="bg-bg text-muted text-xs uppercase tracking-wider print:bg-transparent print:text-black print:border-b print:border-black">
                             <tr>
-                                <th className="p-4 font-semibold">Activity</th>
-                                <th className="p-4 font-semibold">Quantity</th>
-                                <th className="p-4 font-semibold">Rate</th>
-                                <th className="p-4 font-semibold text-right">Total Amount</th>
+                                <th scope="col" className="p-4 font-semibold">Activity</th>
+                                <th scope="col" className="p-4 font-semibold">Quantity</th>
+                                <th scope="col" className="p-4 font-semibold">Rate</th>
+                                <th scope="col" className="p-4 font-semibold text-right">Total Amount</th>
                             </tr>
                         </thead>
-                        <tbody className="text-sm divide-y divide-slate-100 print:divide-slate-300">
+                        <tbody className="text-sm divide-y divide-line print:divide-slate-300">
                             <tr>
-                                <td className="p-4"><p className="font-bold text-slate-800">Excavation (Digging)</p><p className="text-xs text-slate-500 mt-0.5 print:text-black">Includes sloped cuts and working space</p></td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{results.bankVol.toFixed(2)} m³</td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{inputs.currency}{inputs.excavationRate}/m³</td>
-                                <td className="p-4 font-mono font-bold text-right text-slate-800">{inputs.currency}{results.costExcavation.toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+                                <td className="p-4"><p className="font-bold text-ink">Excavation (Digging)</p><p className="text-xs text-muted mt-0.5 print:text-black">Includes sloped cuts and working space</p></td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{results.bankVol.toFixed(2)} m³</td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{inputs.currency}{inputs.excavationRate}/m³</td>
+                                <td className="p-4 font-mono font-bold text-right text-ink">{inputs.currency}{results.costExcavation.toLocaleString('en-IN', {maximumFractionDigits: 2})}</td>
                             </tr>
                             <tr>
-                                <td className="p-4"><p className="font-bold text-slate-800">Haulage (Trucking / Disposal)</p><p className="text-xs text-slate-500 mt-0.5 print:text-black">Based on loose volume ({results.looseVol.toFixed(1)}m³) @ {inputs.truckCapacity}m³/truck</p></td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{results.totalTrucks} Trips</td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{inputs.currency}{inputs.haulageRate}/Trip</td>
-                                <td className="p-4 font-mono font-bold text-right text-slate-800">{inputs.currency}{results.costHauling.toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+                                <td className="p-4"><p className="font-bold text-ink">Haulage (Trucking / Disposal)</p><p className="text-xs text-muted mt-0.5 print:text-black">Based on loose volume ({results.looseVol.toFixed(1)}m³) @ {inputs.truckCapacity}m³/truck</p></td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{results.totalTrucks} Trips</td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{inputs.currency}{inputs.haulageRate}/Trip</td>
+                                <td className="p-4 font-mono font-bold text-right text-ink">{inputs.currency}{results.costHauling.toLocaleString('en-IN', {maximumFractionDigits: 2})}</td>
                             </tr>
                         </tbody>
-                        <tfoot className="bg-emerald-50 print:bg-transparent print:border-t-2 print:border-black">
+                        <tfoot className="bg-sunken print:bg-transparent print:border-t-2 print:border-black">
                             <tr>
-                                <td colSpan="3" className="p-4 text-right font-bold text-emerald-800 uppercase tracking-widest text-xs print:text-black">Estimated Grand Total</td>
-                                <td className="p-4 font-mono font-black text-emerald-600 text-xl text-right print:text-black">{inputs.currency}{results.grandTotal.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>
+                                <td colSpan="3" className="p-4 text-right font-bold text-ink text-xs print:text-black">Estimated Grand Total</td>
+                                <td className="p-4 font-mono font-semibold text-ink text-xl text-right print:text-black">{inputs.currency}{results.grandTotal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</td>
                             </tr>
                         </tfoot>
                     </table>

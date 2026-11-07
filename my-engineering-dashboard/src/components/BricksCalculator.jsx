@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useEffectEvent } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import disposeObject from '../lib/disposeObject';
+import { useCad } from '../context/CadContext.jsx';
 
 const unitToMeter = { 'm': 1, 'ft': 0.3048, 'in': 0.0254, 'cm': 0.01, 'mm': 0.001 };
 
@@ -17,6 +19,7 @@ const brickTypes = [
 ];
 
 export default function BricksCalculator() {
+  const { addToCad } = useCad();
   // --- Core Inputs ---
   const [unitSystem, setUnitSystem] = useState('ft'); 
   const [inputs, setInputs] = useState({
@@ -93,18 +96,23 @@ export default function BricksCalculator() {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.setSize(initialWidth, initialHeight);
     rendererRef.current = renderer;
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
+    // Wheel zoom only after the model is clicked, so scrolling over it scrolls the page;
+    // on touch, vertical drags keep scrolling the page.
+    controls.enableZoom = false;
+    renderer.domElement.style.touchAction = 'pan-y';
+    renderer.domElement.addEventListener('pointerdown', () => { controls.enableZoom = true; });
+    renderer.domElement.addEventListener('pointerleave', () => { controls.enableZoom = false; });
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.enableZoom = true;
     controls.maxDistance = 300; 
     controls.minDistance = 0.5;
-    controls.autoRotate = true; 
+    controls.autoRotate = false; 
     controls.autoRotateSpeed = 0.5;
     controlsRef.current = controls;
 
@@ -151,6 +159,7 @@ export default function BricksCalculator() {
           animationDataRef.current = [];
         }
       }
+      if (document.hidden || container.clientWidth === 0) return;
       renderer.render(scene, camera);
     };
     animate();
@@ -179,6 +188,7 @@ export default function BricksCalculator() {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
       if (container && renderer.domElement) container.removeChild(renderer.domElement);
+      disposeObject(scene);
       renderer.dispose();
     };
   }, []);
@@ -200,13 +210,8 @@ export default function BricksCalculator() {
     }
   }, [mode]);
 
-  // --- Dynamic Core Calculation ---
-  useEffect(() => {
-    const handler = setTimeout(() => calculateAndRender(), 300);
-    return () => clearTimeout(handler);
-  }, [inputs, selectedBrick, unitSystem, openings, visualTheme]);
 
-  const calculateAndRender = () => {
+  function calculateAndRender() {
     const { wallL, wallH, wallT, ratio, brickWastage, brickPrice, cementPrice, sandPrice, laborRate } = inputs;
     const scene = sceneRef.current;
     
@@ -214,7 +219,7 @@ export default function BricksCalculator() {
     if(!wallL || !wallH || !wallT || !scene) {
         if (instancedMeshRef.current) { 
             scene?.remove(instancedMeshRef.current); 
-            instancedMeshRef.current.dispose(); 
+            disposeObject(instancedMeshRef.current); 
             instancedMeshRef.current = null;
         }
         return;
@@ -278,7 +283,7 @@ export default function BricksCalculator() {
     // --- 3D Scene Assembly ---
     if (instancedMeshRef.current) { 
         scene.remove(instancedMeshRef.current); 
-        instancedMeshRef.current.dispose(); 
+        disposeObject(instancedMeshRef.current); 
     }
 
     // Protection against NaN/Infinity causing rendering crashes
@@ -424,83 +429,76 @@ export default function BricksCalculator() {
       cementVol, cementBagsExact, cementBagsBuy, cementKg, sandVol, sandKg, sandTons,
       costBricks, costCement, costSand, totalMaterialCost, laborDays, costLabor, grandTotal
     });
-  };
+  }
+
+  // Recalculate 300ms after the last input change.
+  const recalculate = useEffectEvent(() => calculateAndRender());
+  useEffect(() => {
+    const handler = setTimeout(() => recalculate(), 300);
+    return () => clearTimeout(handler);
+  }, [inputs, selectedBrick, unitSystem, openings, visualTheme]);
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 p-4 md:p-6 bg-[#020617] text-slate-100 min-h-screen relative overflow-hidden font-sans print:p-0 print:bg-white print:text-black print:overflow-visible print:min-h-0 print:block">
+    <div className="flex flex-col wide:flex-row gap-6 w-full h-full pb-6 text-ink font-sans print:p-0 print:bg-white print:text-black print:overflow-visible print:min-h-0 print:block">
       
-      <div className="absolute top-[-10%] left-[-5%] w-[400px] h-[400px] bg-cyan-600/20 blur-[120px] rounded-full pointer-events-none print:hidden"></div>
-      <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-orange-600/10 blur-[150px] rounded-full pointer-events-none print:hidden"></div>
-
       {/* --- Left Panel: Settings --- */}
-      <div className="w-full xl:w-[380px] bg-slate-900/60 backdrop-blur-xl p-5 rounded-3xl shadow-2xl border border-slate-700/50 flex flex-col gap-4 z-10 relative h-auto xl:h-[88vh] overflow-hidden shrink-0 print:hidden">
+      <div className="w-full wide:w-[380px] bg-surface p-5 rounded-lg border border-line flex flex-col gap-4 z-10 relative h-auto wide:h-[calc(100vh-140px)] overflow-hidden shrink-0 print:hidden">
         
-        <div className="flex items-center justify-between pb-3 border-b border-slate-700/50 shrink-0">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/30 text-lg">🧱</div>
-                <div>
-                  <h2 className="text-lg font-black text-white tracking-wide leading-tight">CivisMetric</h2>
-                  <p className="text-[9px] text-cyan-400 font-mono uppercase tracking-widest">Estimation Engine</p>
-                </div>
-            </div>
-            <select name="currency" value={inputs.currency} onChange={handleInputChange} className="bg-slate-800/80 border border-slate-600/50 rounded-lg py-1 px-2 text-xs outline-none focus:ring-1 focus:ring-cyan-500 text-cyan-400 font-bold transition-all cursor-pointer">
-                <option value="₹">₹ INR</option>
-                <option value="$">$ USD</option>
-                <option value="€">€ EUR</option>
-                <option value="£">£ GBP</option>
-            </select>
+        <div className="flex items-center justify-between pb-3 border-b border-line shrink-0">
+            <h2 className="text-sm font-semibold text-ink">Inputs</h2>
+            <span className="text-xs text-muted font-medium whitespace-nowrap">Rates in ₹ INR</span>
         </div>
         
         <div className="overflow-y-auto custom-scroll pr-1 space-y-4 flex-1 pb-4">
             
             {/* Dimensions Card */}
-            <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-cyan-500/30 transition-colors group">
+            <div className="p-4 rounded-lg border border-line">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 group-hover:text-cyan-400 transition-colors"><span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_8px_#06b6d4]"></span>Geometry</h3>
-                    <select value={unitSystem} onChange={(e) => setUnitSystem(e.target.value)} className="bg-slate-900/80 border border-slate-600/50 text-[10px] rounded-md px-1.5 py-1 outline-none text-white cursor-pointer focus:ring-1 focus:ring-cyan-500 transition-all">
+                    <h3 className="text-xs font-bold text-ink-2 flex items-center gap-2 transition-colors">Geometry</h3>
+                    <select aria-label="Unit system" value={unitSystem} onChange={(e) => setUnitSystem(e.target.value)} className="bg-surface border border-line-control text-xs rounded px-1.5 py-1 outline-none text-ink cursor-pointer focus:ring-1 focus:ring-focus transition-all">
                         <option value="m">Meters (m)</option>
                         <option value="ft">Feet (ft)</option>
                     </select>
                 </div>
                 <div className="grid grid-cols-3 gap-2 mb-3">
                     <div>
-                      <label className="block text-[9px] text-slate-400 mb-1 uppercase">Length</label>
-                      <input type="number" step="0.1" name="wallL" value={inputs.wallL} onChange={handleInputChange} className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none text-white" />
+                      <label htmlFor="bricks-wallL" className="block text-xs text-muted mb-1">Length</label>
+                      <input id="bricks-wallL" type="number" step="0.1" name="wallL" value={inputs.wallL} onChange={handleInputChange} className="w-full bg-surface border border-line-control rounded p-2 text-xs focus:ring-1 focus:ring-focus outline-none text-ink" />
                     </div>
                     <div>
-                      <label className="block text-[9px] text-slate-400 mb-1 uppercase">Height</label>
-                      <input type="number" step="0.1" name="wallH" value={inputs.wallH} onChange={handleInputChange} className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none text-white" />
+                      <label htmlFor="bricks-wallH" className="block text-xs text-muted mb-1">Height</label>
+                      <input id="bricks-wallH" type="number" step="0.1" name="wallH" value={inputs.wallH} onChange={handleInputChange} className="w-full bg-surface border border-line-control rounded p-2 text-xs focus:ring-1 focus:ring-focus outline-none text-ink" />
                     </div>
                     <div>
-                      <label className="block text-[9px] text-slate-400 mb-1 uppercase">Thick</label>
-                      <input type="number" step="0.1" name="wallT" value={inputs.wallT} onChange={handleInputChange} className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none text-white" />
+                      <label htmlFor="bricks-wallT" className="block text-xs text-muted mb-1">Thick</label>
+                      <input id="bricks-wallT" type="number" step="0.1" name="wallT" value={inputs.wallT} onChange={handleInputChange} className="w-full bg-surface border border-line-control rounded p-2 text-xs focus:ring-1 focus:ring-focus outline-none text-ink" />
                     </div>
                 </div>
                 
-                <div className="pt-3 border-t border-slate-700/50">
-                    <label className="flex justify-between items-center text-[10px] text-slate-300 uppercase mb-2">
+                <div className="pt-3 border-t border-line">
+                    <label className="flex justify-between items-center text-xs text-ink-2 mb-2">
                         <span>Physical Openings</span>
-                        <span className="text-cyan-500 font-mono text-[9px]">{openings.length} Active</span>
+                        <span className="text-primary font-mono text-xs">{openings.length} Active</span>
                     </label>
-                    <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-700/50 mb-2">
+                    <div className="bg-surface p-2 rounded-lg border border-line mb-2">
                         <div className="flex gap-1 mb-2">
-                            <button onClick={() => setNewOpening({...newOpening, type: 'door'})} className={`flex-1 py-1 text-[10px] rounded uppercase font-bold transition-all ${newOpening.type === 'door' ? 'bg-cyan-500 text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>Door</button>
-                            <button onClick={() => setNewOpening({...newOpening, type: 'window'})} className={`flex-1 py-1 text-[10px] rounded uppercase font-bold transition-all ${newOpening.type === 'window' ? 'bg-cyan-500 text-slate-900' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>Window</button>
+                            <button onClick={() => setNewOpening({...newOpening, type: 'door'})} className={`flex-1 py-1 text-xs rounded  font-bold transition-all ${newOpening.type === 'door' ? 'bg-primary text-on-primary' : 'bg-sunken text-muted hover:text-ink'}`}>Door</button>
+                            <button onClick={() => setNewOpening({...newOpening, type: 'window'})} className={`flex-1 py-1 text-xs rounded  font-bold transition-all ${newOpening.type === 'window' ? 'bg-primary text-on-primary' : 'bg-sunken text-muted hover:text-ink'}`}>Window</button>
                         </div>
                         <div className="grid grid-cols-4 gap-1 mb-2">
-                             <div><label className="block text-[8px] text-slate-500 uppercase">W ({unitSystem})</label><input type="number" value={newOpening.width} onChange={(e)=>setNewOpening({...newOpening, width: parseFloat(e.target.value)||0})} className="w-full bg-slate-800 text-white text-xs p-1 rounded text-center outline-none border border-slate-700 focus:border-cyan-500"/></div>
-                             <div><label className="block text-[8px] text-slate-500 uppercase">H ({unitSystem})</label><input type="number" value={newOpening.height} onChange={(e)=>setNewOpening({...newOpening, height: parseFloat(e.target.value)||0})} className="w-full bg-slate-800 text-white text-xs p-1 rounded text-center outline-none border border-slate-700 focus:border-cyan-500"/></div>
-                             <div><label className="block text-[8px] text-slate-500 uppercase">Ctr X</label><input type="number" value={newOpening.posX} onChange={(e)=>setNewOpening({...newOpening, posX: parseFloat(e.target.value)||0})} className="w-full bg-slate-800 text-white text-xs p-1 rounded text-center outline-none border border-slate-700 focus:border-cyan-500"/></div>
-                             <div><label className="block text-[8px] text-slate-500 uppercase">Ctr Y</label><input type="number" value={newOpening.posY} onChange={(e)=>setNewOpening({...newOpening, posY: parseFloat(e.target.value)||0})} className="w-full bg-slate-800 text-white text-xs p-1 rounded text-center outline-none border border-slate-700 focus:border-cyan-500"/></div>
+                             <div><label htmlFor="bricks-field-3" className="block text-xs text-muted">W ({unitSystem})</label><input id="bricks-field-3" type="number" value={newOpening.width} onChange={(e)=>setNewOpening({...newOpening, width: parseFloat(e.target.value)||0})} className="w-full bg-sunken text-ink text-xs p-1 rounded text-center outline-none border border-line focus:border-primary"/></div>
+                             <div><label htmlFor="bricks-field-4" className="block text-xs text-muted">H ({unitSystem})</label><input id="bricks-field-4" type="number" value={newOpening.height} onChange={(e)=>setNewOpening({...newOpening, height: parseFloat(e.target.value)||0})} className="w-full bg-sunken text-ink text-xs p-1 rounded text-center outline-none border border-line focus:border-primary"/></div>
+                             <div><label htmlFor="bricks-field-5" className="block text-xs text-muted">Ctr X</label><input id="bricks-field-5" type="number" value={newOpening.posX} onChange={(e)=>setNewOpening({...newOpening, posX: parseFloat(e.target.value)||0})} className="w-full bg-sunken text-ink text-xs p-1 rounded text-center outline-none border border-line focus:border-primary"/></div>
+                             <div><label htmlFor="bricks-field-6" className="block text-xs text-muted">Ctr Y</label><input id="bricks-field-6" type="number" value={newOpening.posY} onChange={(e)=>setNewOpening({...newOpening, posY: parseFloat(e.target.value)||0})} className="w-full bg-sunken text-ink text-xs p-1 rounded text-center outline-none border border-line focus:border-primary"/></div>
                         </div>
-                        <button onClick={addOpening} className="w-full bg-slate-800 hover:bg-cyan-500/20 border border-slate-600 hover:border-cyan-500 text-slate-300 hover:text-cyan-400 py-1 text-[10px] uppercase tracking-widest rounded transition-all">Add Cutout</button>
+                        <button onClick={addOpening} className="w-full bg-sunken hover:bg-primary/20 border border-line-control hover:border-primary text-ink-2 hover:text-primary py-1 text-xs rounded transition-all">Add Cutout</button>
                     </div>
                     <div className="space-y-1 max-h-24 overflow-y-auto custom-scroll pr-1">
                         {openings.map((op, i) => (
-                            <div key={i} className="flex justify-between items-center bg-slate-900/80 px-2 py-1.5 rounded border border-slate-700/50">
-                                <span className={`text-[10px] font-bold uppercase ${op.type==='door'?'text-emerald-400':'text-blue-400'}`}>{op.type}</span>
-                                <span className="text-[10px] text-slate-400 font-mono">{op.width}x{op.height} @ {op.posX},{op.posY}</span>
-                                <button onClick={()=>removeOpening(i)} className="text-red-400 hover:text-red-300 font-bold text-xs">✕</button>
+                            <div key={i} className="flex justify-between items-center bg-surface px-2 py-1.5 rounded border border-line">
+                                <span className={`text-xs font-bold  ${op.type==='door'?'text-ink':'text-primary'}`}>{op.type}</span>
+                                <span className="text-xs text-muted font-mono">{op.width}x{op.height} @ {op.posX},{op.posY}</span>
+                                <button onClick={()=>removeOpening(i)} className="text-error hover:text-error font-bold text-xs">✕</button>
                             </div>
                         ))}
                     </div>
@@ -508,76 +506,76 @@ export default function BricksCalculator() {
             </div>
 
             {/* Brick & Mortar Card */}
-            <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-orange-500/30 transition-colors group">
+            <div className="p-4 rounded-lg border border-line">
                 <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 group-hover:text-orange-400 transition-colors"><span className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></span>Materials</h3>
-                    <select value={selectedBrick.name} onChange={handleBrickChange} className="bg-slate-900/80 border border-slate-600/50 text-[10px] rounded-md px-1.5 py-1 outline-none text-white cursor-pointer focus:ring-1 focus:ring-orange-500 transition-all max-w-[120px] truncate">
+                    <h3 className="text-xs font-bold text-ink-2 flex items-center gap-2 transition-colors">Materials</h3>
+                    <select aria-label="Brick type" value={selectedBrick.name} onChange={handleBrickChange} className="bg-surface border border-line-control text-xs rounded px-1.5 py-1 outline-none text-ink cursor-pointer focus:ring-1 focus:ring-focus transition-all max-w-[120px] truncate">
                         {brickTypes.map((b) => (<option key={b.name} value={b.name}>{b.name}</option>))}
                     </select>
                 </div>
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   <div>
-                    <label className="block text-[9px] text-slate-500 mb-1 uppercase text-center">L ({selectedBrick.unit})</label>
-                    <div className="w-full bg-slate-900/50 border border-slate-700/80 rounded-lg p-2 text-xs text-center text-slate-400 font-mono">{selectedBrick.l}</div>
+                    <label className="block text-xs text-muted mb-1 text-center">L ({selectedBrick.unit})</label>
+                    <div className="w-full bg-surface border border-line rounded-lg p-2 text-xs text-center text-muted font-mono">{selectedBrick.l}</div>
                   </div>
                   <div>
-                    <label className="block text-[9px] text-slate-500 mb-1 uppercase text-center">W ({selectedBrick.unit})</label>
-                    <div className="w-full bg-slate-900/50 border border-slate-700/80 rounded-lg p-2 text-xs text-center text-slate-400 font-mono">{selectedBrick.w}</div>
+                    <label className="block text-xs text-muted mb-1 text-center">W ({selectedBrick.unit})</label>
+                    <div className="w-full bg-surface border border-line rounded-lg p-2 text-xs text-center text-muted font-mono">{selectedBrick.w}</div>
                   </div>
                   <div>
-                    <label className="block text-[9px] text-slate-500 mb-1 uppercase text-center">H ({selectedBrick.unit})</label>
-                    <div className="w-full bg-slate-900/50 border border-slate-700/80 rounded-lg p-2 text-xs text-center text-slate-400 font-mono">{selectedBrick.h}</div>
+                    <label className="block text-xs text-muted mb-1 text-center">H ({selectedBrick.unit})</label>
+                    <div className="w-full bg-surface border border-line rounded-lg p-2 text-xs text-center text-muted font-mono">{selectedBrick.h}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-700/50">
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-line">
                     <div>
-                        <label className="block text-[9px] text-slate-400 mb-1 uppercase">Mortar Ratio (C:S)</label>
-                        <select name="ratio" value={inputs.ratio} onChange={handleInputChange} className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg p-2 text-xs outline-none cursor-pointer focus:ring-1 focus:ring-orange-500 text-white">
+                        <label htmlFor="bricks-ratio" className="block text-xs text-muted mb-1">Mortar Ratio (C:S)</label>
+                        <select id="bricks-ratio" name="ratio" value={inputs.ratio} onChange={handleInputChange} className="w-full bg-surface border border-line-control rounded p-2 text-xs outline-none cursor-pointer focus:ring-1 focus:ring-focus text-ink">
                             <option value="4">1:4 (Heavy)</option>
                             <option value="5">1:5 (Std)</option>
                             <option value="6">1:6 (Light)</option>
                         </select>
                     </div>
                     <div>
-                        <label className="block text-[9px] text-slate-400 mb-1 uppercase">Wastage Buffer</label>
-                        <div className="flex items-center bg-slate-900/80 border border-slate-700/80 rounded-lg pr-2 focus-within:ring-1 focus-within:ring-orange-500">
-                            <input type="number" name="brickWastage" value={inputs.brickWastage} onChange={handleInputChange} className="w-full bg-transparent p-2 text-xs outline-none text-white" />
-                            <span className="text-slate-500 text-xs">%</span>
+                        <label htmlFor="bricks-brickWastage" className="block text-xs text-muted mb-1">Wastage Buffer</label>
+                        <div className="flex items-center bg-surface border border-line rounded-lg pr-2 focus-within:ring-1 focus-within:ring-focus">
+                            <input id="bricks-brickWastage" type="number" name="brickWastage" value={inputs.brickWastage} onChange={handleInputChange} className="w-full bg-transparent p-2 text-xs outline-none text-ink" />
+                            <span className="text-muted text-xs">%</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Financial & Ops Card */}
-            <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-emerald-500/30 transition-colors group mb-2">
-                <h3 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2 group-hover:text-emerald-400 transition-colors"><span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>Rates & Operations</h3>
+            <div className="p-4 rounded-lg border border-line mb-2">
+                <h3 className="text-xs font-bold text-ink-2 mb-3 flex items-center gap-2 transition-colors">Rates & Operations</h3>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                      <span className="text-[11px] text-slate-400 font-medium ml-1">Brick (1 unit)</span>
-                      <div className="flex items-center bg-slate-800 rounded text-xs px-2 border border-slate-600/50">
-                          <span className="text-emerald-500">{inputs.currency}</span>
-                          <input type="number" name="brickPrice" value={inputs.brickPrice} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-white font-mono" />
+                  <div className="flex items-center justify-between bg-surface p-2 rounded-lg border border-line">
+                      <span className="text-xs text-muted font-medium ml-1">Brick (1 unit)</span>
+                      <div className="flex items-center bg-sunken rounded text-xs px-2 border border-line-control">
+                          <span className="text-ink">{inputs.currency}</span>
+                          <input aria-label="Brick (1 unit)" type="number" name="brickPrice" value={inputs.brickPrice} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-ink font-mono" />
                       </div>
                   </div>
-                  <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                      <span className="text-[11px] text-slate-400 font-medium ml-1">Cement (Bag)</span>
-                      <div className="flex items-center bg-slate-800 rounded text-xs px-2 border border-slate-600/50">
-                          <span className="text-emerald-500">{inputs.currency}</span>
-                          <input type="number" name="cementPrice" value={inputs.cementPrice} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-white font-mono" />
+                  <div className="flex items-center justify-between bg-surface p-2 rounded-lg border border-line">
+                      <span className="text-xs text-muted font-medium ml-1">Cement (Bag)</span>
+                      <div className="flex items-center bg-sunken rounded text-xs px-2 border border-line-control">
+                          <span className="text-ink">{inputs.currency}</span>
+                          <input aria-label="Cement (Bag)" type="number" name="cementPrice" value={inputs.cementPrice} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-ink font-mono" />
                       </div>
                   </div>
-                  <div className="flex items-center justify-between bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                      <span className="text-[11px] text-slate-400 font-medium ml-1">Sand (Ton)</span>
-                      <div className="flex items-center bg-slate-800 rounded text-xs px-2 border border-slate-600/50">
-                          <span className="text-emerald-500">{inputs.currency}</span>
-                          <input type="number" name="sandPrice" value={inputs.sandPrice} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-white font-mono" />
+                  <div className="flex items-center justify-between bg-surface p-2 rounded-lg border border-line">
+                      <span className="text-xs text-muted font-medium ml-1">Sand (Ton)</span>
+                      <div className="flex items-center bg-sunken rounded text-xs px-2 border border-line-control">
+                          <span className="text-ink">{inputs.currency}</span>
+                          <input aria-label="Sand (Ton)" type="number" name="sandPrice" value={inputs.sandPrice} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-ink font-mono" />
                       </div>
                   </div>
-                  <div className="flex items-center justify-between bg-emerald-900/10 p-2 rounded-lg border border-emerald-800/30">
-                      <span className="text-[11px] text-emerald-400/80 font-medium ml-1">Labor Crew (Day)</span>
-                      <div className="flex items-center bg-slate-800 rounded text-xs px-2 border border-emerald-600/50">
-                          <span className="text-emerald-400">{inputs.currency}</span>
-                          <input type="number" name="laborRate" value={inputs.laborRate} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-white font-mono" />
+                  <div className="flex items-center justify-between bg-sunken p-2 rounded-lg border border-line-control">
+                      <span className="text-xs text-ink font-medium ml-1">Labor Crew (Day)</span>
+                      <div className="flex items-center bg-sunken rounded text-xs px-2 border border-line-control">
+                          <span className="text-ink">{inputs.currency}</span>
+                          <input aria-label="Labor Crew (Day)" type="number" name="laborRate" value={inputs.laborRate} onChange={handleInputChange} className="w-14 bg-transparent p-1 text-right outline-none text-ink font-mono" />
                       </div>
                   </div>
                 </div>
@@ -585,65 +583,96 @@ export default function BricksCalculator() {
         </div>
       </div>
 
+      {results && (
+        <div className="wide:hidden sticky bottom-0 lg:-bottom-8 z-30 -mx-4 sm:-mx-6 lg:-mx-8 -my-3 px-4 sm:px-6 lg:px-8 py-3 bg-surface border-y border-line print:hidden" aria-live="polite">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                       <div className="flex flex-col">
+                           <span className="text-xs text-muted font-bold">Req. Bricks</span>
+                           <span className="text-lg font-semibold text-ink leading-none">{results.noOfBricksToOrder.toLocaleString('en-IN')}</span>
+                       </div>
+                       <div className="w-px h-8 bg-line"></div>
+                       <div className="flex flex-col">
+                           <span className="text-xs text-muted font-bold">Est. Total</span>
+                           <span className="text-lg font-semibold text-ink leading-none">{inputs.currency}{results.grandTotal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</span>
+                       </div>
+                    </div>
+        </div>
+      )}
+
       {/* --- Right Panel: Viewer & Report --- */}
-      <div className="w-full xl:w-[calc(100%-404px)] bg-slate-900/40 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-700/50 flex flex-col overflow-hidden relative z-10 xl:h-[88vh] print:w-full print:h-auto print:border-none print:shadow-none print:bg-transparent print:overflow-visible print:block">
+      <div className="w-full wide:w-[calc(100%-404px)] bg-surface rounded-lg border border-line flex flex-col overflow-hidden relative z-10 wide:h-[calc(100vh-140px)] print:w-full print:h-auto print:border-none print:shadow-none print:bg-transparent print:overflow-visible print:block">
         
         {/* Unified Top Toolbar */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-4 border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-md z-30 shrink-0 print:hidden">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-4 border-b border-line bg-surface z-30 shrink-0 print:hidden">
             
-            <div className="flex-1 h-10 flex items-center">
+            <div className="flex-1 min-h-10 flex items-center">
                 {results && mode === 'normal' ? (
-                    <div className="flex items-center gap-4 animate-fade-in">
+                    <div className="hidden wide:flex flex-wrap items-center gap-x-4 gap-y-1">
                        <div className="flex flex-col">
-                           <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Req. Bricks</span>
-                           <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500 leading-none">{results.noOfBricksToOrder.toLocaleString()}</span>
+                           <span className="text-xs text-muted font-bold">Req. Bricks</span>
+                           <span className="text-lg font-semibold text-ink leading-none">{results.noOfBricksToOrder.toLocaleString('en-IN')}</span>
                        </div>
-                       <div className="w-px h-8 bg-slate-700"></div>
+                       <div className="w-px h-8 bg-line"></div>
                        <div className="flex flex-col">
-                           <span className="text-[9px] text-slate-400 uppercase tracking-widest font-bold">Est. Total</span>
-                           <span className="text-lg font-black text-emerald-400 leading-none">{inputs.currency}{results.grandTotal.toLocaleString('en-US', {maximumFractionDigits: 0})}</span>
+                           <span className="text-xs text-muted font-bold">Est. Total</span>
+                           <span className="text-lg font-semibold text-ink leading-none">{inputs.currency}{results.grandTotal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</span>
                        </div>
                     </div>
                 ) : mode === 'civil' ? (
                     <div className="flex items-center animate-fade-in">
-                        <h2 className="text-lg font-bold text-white uppercase tracking-widest">Financial Report</h2>
+                        <h2 className="text-lg font-bold text-ink">Financial Report</h2>
                     </div>
                 ) : mode === 'math' ? (
                     <div className="flex items-center animate-fade-in">
-                        <h2 className="text-lg font-bold text-white uppercase tracking-widest">Engineering Calculations</h2>
+                        <h2 className="text-lg font-bold text-ink">Engineering Calculations</h2>
                     </div>
                 ) : null}
             </div>
 
             {/* Right Side: Actions & Toggles */}
             <div className="flex items-center gap-3 shrink-0">
+                {results && (
+                    <button
+                      onClick={() => addToCad({
+                        type: 'wall_rectangle',
+                        source: 'Bricks Calculator',
+                        label: `Brick Wall (${(inputs.wallL * (unitToMeter[unitSystem] || 1)).toFixed(1)}m × ${(inputs.wallH * (unitToMeter[unitSystem] || 1)).toFixed(1)}m)`,
+                        length: inputs.wallL * (unitToMeter[unitSystem] || 1),
+                        width: 4.0,
+                        thickness: (inputs.wallT * (unitToMeter[unitSystem] || 1)) || 0.23
+                      })}
+                      className="px-3 py-2 bg-sunken hover:bg-primary text-primary hover:text-ink border border-line-control rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                    >
+                      Add to CAD
+                    </button>
+                )}
                 {(mode === 'civil' || mode === 'math') && (
-                    <button onClick={handlePrint} className="bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/50 hover:border-emerald-500 text-emerald-400 hover:text-slate-900 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_10px_rgba(16,185,129,0.1)] hover:shadow-[0_0_15px_rgba(16,185,129,0.4)] flex items-center gap-2">
+                    <button onClick={handlePrint} className="bg-sunken hover:bg-primary border border-line-control hover:border-primary text-ink hover:text-on-primary px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2">
                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                        Print
                     </button>
                 )}
 
-                <div className="bg-slate-800/90 p-1 rounded-xl border border-slate-700/50 flex gap-1 shadow-inner">
-                    <button onClick={() => setMode('normal')} className={`px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${mode === 'normal' ? 'bg-cyan-500 text-slate-900 shadow-[0_0_10px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white'}`}>3D Vis</button>
-                    <button onClick={() => setMode('math')} className={`px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${mode === 'math' ? 'bg-blue-500 text-slate-900 shadow-[0_0_10px_rgba(59,130,246,0.4)]' : 'text-slate-400 hover:text-white'}`}>Math</button>
-                    <button onClick={() => setMode('civil')} className={`px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-300 ${mode === 'civil' ? 'bg-emerald-500 text-slate-900 shadow-[0_0_10px_rgba(16,185,129,0.4)]' : 'text-slate-400 hover:text-white'}`}>Report</button>
+                <div className="bg-sunken p-1 rounded-lg border border-line flex gap-1">
+                    <button onClick={() => setMode('normal')} className={`px-3 py-2 rounded-lg text-xs font-bold   transition-all duration-300 ${mode === 'normal' ? 'bg-primary text-on-primary' : 'text-muted hover:text-ink'}`}>3D Vis</button>
+                    <button onClick={() => setMode('math')} className={`px-3 py-2 rounded-lg text-xs font-bold   transition-all duration-300 ${mode === 'math' ? 'bg-primary text-on-primary' : 'text-muted hover:text-ink'}`}>Math</button>
+                    <button onClick={() => setMode('civil')} className={`px-3 py-2 rounded-lg text-xs font-bold   transition-all duration-300 ${mode === 'civil' ? 'bg-primary text-on-primary' : 'text-muted hover:text-ink'}`}>Report</button>
                 </div>
             </div>
         </div>
 
         {/* 3D Canvas View */}
-        <div className={`${mode === 'normal' ? 'flex' : 'hidden'} flex-1 relative min-h-[500px] w-full overflow-hidden bg-gradient-to-b from-slate-900/50 to-[#020617] group print:hidden`}>
-            <div ref={mountRef} className="absolute inset-0 cursor-move"></div>
+        <div className={`${mode === 'normal' ? 'flex' : 'hidden'} flex-1 relative min-h-[500px] w-full overflow-hidden bg-[#14171B] group print:hidden`}>
+            <div ref={mountRef} className="absolute inset-0 cursor-move" role="img" aria-label="3D model of the current inputs. All quantities are listed in the Math and Report views."></div>
             
             {/* Theme Toggle */}
-            <div className="absolute bottom-6 right-6 z-30 bg-slate-800/80 backdrop-blur-md p-1 rounded-xl border border-slate-700/50 flex gap-1 shadow-xl">
-                <button onClick={() => setVisualTheme('realistic')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${visualTheme === 'realistic' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/50' : 'text-slate-500 hover:text-slate-300'}`}>Realistic</button>
-                <button onClick={() => setVisualTheme('blueprint')} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${visualTheme === 'blueprint' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-slate-500 hover:text-slate-300'}`}>Blueprint</button>
+            <div className="absolute bottom-6 right-6 z-30 bg-sunken p-1 rounded-lg border border-line flex gap-1">
+                <button onClick={() => setVisualTheme('realistic')} className={`px-3 py-1.5 rounded-lg text-xs font-bold  transition-all ${visualTheme === 'realistic' ? 'bg-sunken text-accent border border-line-control' : 'text-muted hover:text-ink-2'}`}>Realistic</button>
+                <button onClick={() => setVisualTheme('blueprint')} className={`px-3 py-1.5 rounded-lg text-xs font-bold  transition-all ${visualTheme === 'blueprint' ? 'bg-sunken text-primary border border-line-control' : 'text-muted hover:text-ink-2'}`}>Blueprint</button>
             </div>
 
             {visualWarning && (
-                <div className="absolute bottom-20 right-6 bg-orange-500/20 backdrop-blur-md text-orange-200 border border-orange-500/30 text-[10px] px-3 py-1.5 rounded-full shadow-lg max-w-xs text-right">
+                <div className="absolute bottom-20 right-6 bg-sunken text-accent border border-line-control text-xs px-3 py-1.5 rounded-full max-w-xs text-right">
                     {visualWarning}
                 </div>
             )}
@@ -651,86 +680,86 @@ export default function BricksCalculator() {
 
         {/* --- Engineering Math View --- */}
         {results && mode === 'math' && (
-           <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 bg-slate-50 text-slate-800 print:bg-white print:text-black print:overflow-visible print:h-auto print:w-full print:block">
+           <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 bg-bg text-ink print:bg-white print:text-black print:overflow-visible print:h-auto print:w-full print:block">
               
-              <div className="border-b-2 border-slate-200 pb-6 mb-8 print:border-black">
-                  <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Engineering Calculations</h1>
-                  <p className="text-sm text-slate-500 mt-1 font-mono">Detailed Mathematical Proof (Base Unit: Meters)</p>
+              <div className="border-b-2 border-line pb-6 mb-8 print:border-black">
+                  <h2 className="text-3xl font-semibold text-ink tracking-tight">Engineering Calculations</h2>
+                  <p className="text-sm text-muted mt-1 font-mono">Detailed Mathematical Proof (Base Unit: Meters)</p>
               </div>
 
               <div className="space-y-8 max-w-4xl mx-auto">
                  {/* Step 1 */}
-                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
-                    <h3 className="text-lg font-bold text-cyan-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 1: Volume of Brick Masonry</h3>
-                    <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
-                        <p><span className="text-slate-400 print:text-black font-bold">Total Wall Area</span> = Length (m) × Height (m)</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Total Wall Area</span> = {results.wL_m.toFixed(4)} × {results.wH_m.toFixed(4)} = <span className="font-bold text-slate-900">{results.totalWallArea_m2.toFixed(4)} m²</span></p>
+                 <div className="bg-surface border border-line rounded-lg p-6 print:shadow-none print:border-black print:border-2">
+                    <h3 className="text-lg font-bold text-ink border-b border-line pb-3 mb-4 print:text-black">Step 1: Volume of Brick Masonry</h3>
+                    <div className="font-mono text-sm space-y-3 text-ink-2 bg-bg p-4 rounded-lg print:bg-transparent print:p-0">
+                        <p><span className="text-muted print:text-black font-bold">Total Wall Area</span> = Length (m) × Height (m)</p>
+                        <p><span className="text-muted print:text-black font-bold">Total Wall Area</span> = {results.wL_m.toFixed(4)} × {results.wH_m.toFixed(4)} = <span className="font-bold text-ink">{results.totalWallArea_m2.toFixed(4)} m²</span></p>
                         <br/>
-                        <p><span className="text-slate-400 print:text-black font-bold">Openings Subtracted</span> = {results.openings_m2.toFixed(4)} m²</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Net Wall Area</span> = {results.totalWallArea_m2.toFixed(4)} - {results.openings_m2.toFixed(4)} = <span className="font-bold text-slate-900">{results.netWallArea_m2.toFixed(4)} m²</span></p>
+                        <p><span className="text-muted print:text-black font-bold">Openings Subtracted</span> = {results.openings_m2.toFixed(4)} m²</p>
+                        <p><span className="text-muted print:text-black font-bold">Net Wall Area</span> = {results.totalWallArea_m2.toFixed(4)} - {results.openings_m2.toFixed(4)} = <span className="font-bold text-ink">{results.netWallArea_m2.toFixed(4)} m²</span></p>
                         <br/>
-                        <p><span className="text-slate-400 print:text-black font-bold">Volume of Brick Masonry (V)</span> = Net Wall Area × Wall Thickness (m)</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">V</span> = {results.netWallArea_m2.toFixed(4)} × {results.wT_m.toFixed(4)}</p>
-                        <p className="text-cyan-700 print:text-black font-bold text-base mt-2">V = {results.volWall.toFixed(4)} m³</p>
+                        <p><span className="text-muted print:text-black font-bold">Volume of Brick Masonry (V)</span> = Net Wall Area × Wall Thickness (m)</p>
+                        <p><span className="text-muted print:text-black font-bold">V</span> = {results.netWallArea_m2.toFixed(4)} × {results.wT_m.toFixed(4)}</p>
+                        <p className="text-ink print:text-black font-bold text-base mt-2">V = {results.volWall.toFixed(4)} m³</p>
                     </div>
                  </div>
 
                  {/* Step 2 */}
-                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
-                    <h3 className="text-lg font-bold text-orange-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 2: Number of Bricks Calculation</h3>
-                    <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
-                        <p><span className="text-slate-400 print:text-black font-bold">Size of 1 Brick (without mortar)</span> = {results.bL_m.toFixed(3)}m × {results.bW_m.toFixed(3)}m × {results.bH_m.toFixed(3)}m = <span className="font-bold text-slate-900">{results.volBrickWithoutMortar.toFixed(5)} m³</span></p>
+                 <div className="bg-surface border border-line rounded-lg p-6 print:shadow-none print:border-black print:border-2">
+                    <h3 className="text-lg font-bold text-ink border-b border-line pb-3 mb-4 print:text-black">Step 2: Number of Bricks Calculation</h3>
+                    <div className="font-mono text-sm space-y-3 text-ink-2 bg-bg p-4 rounded-lg print:bg-transparent print:p-0">
+                        <p><span className="text-muted print:text-black font-bold">Size of 1 Brick (without mortar)</span> = {results.bL_m.toFixed(3)}m × {results.bW_m.toFixed(3)}m × {results.bH_m.toFixed(3)}m = <span className="font-bold text-ink">{results.volBrickWithoutMortar.toFixed(5)} m³</span></p>
                         <br/>
-                        <p><span className="text-slate-400 print:text-black font-bold">Size of 1 Brick (with {results.mT_m}m mortar)</span> = {(results.bL_m + results.mT_m).toFixed(3)}m × {(results.bW_m + results.mT_m).toFixed(3)}m × {(results.bH_m + results.mT_m).toFixed(3)}m</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Volume of 1 Brick with mortar</span> = <span className="font-bold text-slate-900">{results.volBrickWithMortar.toFixed(5)} m³</span></p>
+                        <p><span className="text-muted print:text-black font-bold">Size of 1 Brick (with {results.mT_m}m mortar)</span> = {(results.bL_m + results.mT_m).toFixed(3)}m × {(results.bW_m + results.mT_m).toFixed(3)}m × {(results.bH_m + results.mT_m).toFixed(3)}m</p>
+                        <p><span className="text-muted print:text-black font-bold">Volume of 1 Brick with mortar</span> = <span className="font-bold text-ink">{results.volBrickWithMortar.toFixed(5)} m³</span></p>
                         <br/>
-                        <p><span className="text-slate-400 print:text-black font-bold">No. of Bricks</span> = Volume of Brick Masonry / Volume of 1 Brick with mortar</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">No. of Bricks</span> = {results.volWall.toFixed(4)} / {results.volBrickWithMortar.toFixed(5)} = <span className="font-bold text-slate-900">{results.noOfBricksExact.toFixed(2)} Bricks</span></p>
+                        <p><span className="text-muted print:text-black font-bold">No. of Bricks</span> = Volume of Brick Masonry / Volume of 1 Brick with mortar</p>
+                        <p><span className="text-muted print:text-black font-bold">No. of Bricks</span> = {results.volWall.toFixed(4)} / {results.volBrickWithMortar.toFixed(5)} = <span className="font-bold text-ink">{results.noOfBricksExact.toFixed(2)} Bricks</span></p>
                         <br/>
-                        <p><span className="text-slate-400 print:text-black font-bold">Add {inputs.brickWastage}% for Wastage</span> = {results.noOfBricksExact.toFixed(2)} × {(1 + inputs.brickWastage/100).toFixed(2)}</p>
-                        <p className="text-orange-700 print:text-black font-bold text-base mt-2">Total Bricks Required = {results.noOfBricksToOrder.toLocaleString()} Bricks</p>
+                        <p><span className="text-muted print:text-black font-bold">Add {inputs.brickWastage}% for Wastage</span> = {results.noOfBricksExact.toFixed(2)} × {(1 + inputs.brickWastage/100).toFixed(2)}</p>
+                        <p className="text-ink print:text-black font-bold text-base mt-2">Total Bricks Required = {results.noOfBricksToOrder.toLocaleString('en-IN')} Bricks</p>
                     </div>
                  </div>
 
                  {/* Step 3 */}
-                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
-                    <h3 className="text-lg font-bold text-indigo-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 3: Mortar Volume Calculation</h3>
-                    <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
-                        <p><span className="text-slate-400 print:text-black font-bold">Volume covered by bricks only</span> = Exact No. of Bricks × Volume of 1 Brick (without mortar)</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Volume of Bricks</span> = {results.noOfBricksExact.toFixed(2)} × {results.volBrickWithoutMortar.toFixed(5)} = <span className="font-bold text-slate-900">{results.volBricksOnly.toFixed(4)} m³</span></p>
+                 <div className="bg-surface border border-line rounded-lg p-6 print:shadow-none print:border-black print:border-2">
+                    <h3 className="text-lg font-bold text-ink border-b border-line pb-3 mb-4 print:text-black">Step 3: Mortar Volume Calculation</h3>
+                    <div className="font-mono text-sm space-y-3 text-ink-2 bg-bg p-4 rounded-lg print:bg-transparent print:p-0">
+                        <p><span className="text-muted print:text-black font-bold">Volume covered by bricks only</span> = Exact No. of Bricks × Volume of 1 Brick (without mortar)</p>
+                        <p><span className="text-muted print:text-black font-bold">Volume of Bricks</span> = {results.noOfBricksExact.toFixed(2)} × {results.volBrickWithoutMortar.toFixed(5)} = <span className="font-bold text-ink">{results.volBricksOnly.toFixed(4)} m³</span></p>
                         <br/>
-                        <p><span className="text-slate-400 print:text-black font-bold">Wet Volume of Mortar</span> = Total Volume (V) - Volume of Bricks</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Wet Volume of Mortar</span> = {results.volWall.toFixed(4)} - {results.volBricksOnly.toFixed(4)} = <span className="font-bold text-slate-900">{results.volMortarWet.toFixed(4)} m³</span></p>
+                        <p><span className="text-muted print:text-black font-bold">Wet Volume of Mortar</span> = Total Volume (V) - Volume of Bricks</p>
+                        <p><span className="text-muted print:text-black font-bold">Wet Volume of Mortar</span> = {results.volWall.toFixed(4)} - {results.volBricksOnly.toFixed(4)} = <span className="font-bold text-ink">{results.volMortarWet.toFixed(4)} m³</span></p>
                         <br/>
-                        <p className="text-xs text-slate-500 italic print:text-black">// Industry standard: Add 15% for frog filling & wastage, then 25% to convert wet volume to dry volume.</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Add 15% for Frog & Wastage</span> = {results.volMortarWet.toFixed(4)} + {results.mortarFrogWastage.toFixed(4)} = {(results.volMortarWet + results.mortarFrogWastage).toFixed(4)} m³</p>
-                        <p><span className="text-slate-400 print:text-black font-bold">Add 25% for Dry Volume</span> = {(results.volMortarWet + results.mortarFrogWastage).toFixed(4)} + {results.mortarDryConversion.toFixed(4)}</p>
-                        <p className="text-indigo-700 print:text-black font-bold text-base mt-2">Dry Volume of Mortar = {results.volMortarDry.toFixed(4)} m³</p>
+                        <p className="text-xs text-muted italic print:text-black">// Industry standard: Add 15% for frog filling & wastage, then 25% to convert wet volume to dry volume.</p>
+                        <p><span className="text-muted print:text-black font-bold">Add 15% for Frog & Wastage</span> = {results.volMortarWet.toFixed(4)} + {results.mortarFrogWastage.toFixed(4)} = {(results.volMortarWet + results.mortarFrogWastage).toFixed(4)} m³</p>
+                        <p><span className="text-muted print:text-black font-bold">Add 25% for Dry Volume</span> = {(results.volMortarWet + results.mortarFrogWastage).toFixed(4)} + {results.mortarDryConversion.toFixed(4)}</p>
+                        <p className="text-ink print:text-black font-bold text-base mt-2">Dry Volume of Mortar = {results.volMortarDry.toFixed(4)} m³</p>
                     </div>
                  </div>
 
                  {/* Step 4 */}
-                 <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6 print:shadow-none print:border-black print:border-2">
-                    <h3 className="text-lg font-bold text-emerald-700 border-b border-slate-100 pb-3 mb-4 print:text-black">Step 4: Cement & Sand Calculation (Ratio 1:{inputs.ratio})</h3>
-                    <div className="font-mono text-sm space-y-3 text-slate-700 bg-slate-50 p-4 rounded-lg print:bg-transparent print:p-0">
-                        <p><span className="text-slate-400 print:text-black font-bold">Sum of Ratio</span> = 1 + {inputs.ratio} = <span className="font-bold text-slate-900">{results.sumRatio}</span></p>
+                 <div className="bg-surface border border-line rounded-lg p-6 print:shadow-none print:border-black print:border-2">
+                    <h3 className="text-lg font-bold text-ink border-b border-line pb-3 mb-4 print:text-black">Step 4: Cement & Sand Calculation (Ratio 1:{inputs.ratio})</h3>
+                    <div className="font-mono text-sm space-y-3 text-ink-2 bg-bg p-4 rounded-lg print:bg-transparent print:p-0">
+                        <p><span className="text-muted print:text-black font-bold">Sum of Ratio</span> = 1 + {inputs.ratio} = <span className="font-bold text-ink">{results.sumRatio}</span></p>
                         <br/>
-                        <div className="border-l-4 border-emerald-500 pl-4 py-1 print:border-black print:border-l-2">
-                            <p className="font-bold text-slate-900 mb-2">Amount of Cement:</p>
-                            <p><span className="text-slate-400 print:text-black font-bold">Cement Volume</span> = (1 / Sum of Ratio) × Dry Volume</p>
-                            <p><span className="text-slate-400 print:text-black font-bold">Cement Volume</span> = (1 / {results.sumRatio}) × {results.volMortarDry.toFixed(4)} = <span className="font-bold text-slate-900">{results.cementVol.toFixed(4)} m³</span></p>
-                            <p className="text-xs text-slate-500 italic mt-1 print:text-black">// Note: 1 Bag of cement = 0.035 m³ (50 kg)</p>
-                            <p><span className="text-slate-400 print:text-black font-bold">No. of Cement Bags</span> = {results.cementVol.toFixed(4)} / 0.035</p>
-                            <p className="text-emerald-700 print:text-black font-bold text-base mt-2">Total Cement = {results.cementBagsExact.toFixed(2)} Bags</p>
+                        <div className="border-l-4 border-primary pl-4 py-1 print:border-black print:border-l-2">
+                            <p className="font-bold text-ink mb-2">Amount of Cement:</p>
+                            <p><span className="text-muted print:text-black font-bold">Cement Volume</span> = (1 / Sum of Ratio) × Dry Volume</p>
+                            <p><span className="text-muted print:text-black font-bold">Cement Volume</span> = (1 / {results.sumRatio}) × {results.volMortarDry.toFixed(4)} = <span className="font-bold text-ink">{results.cementVol.toFixed(4)} m³</span></p>
+                            <p className="text-xs text-muted italic mt-1 print:text-black">// Note: 1 Bag of cement = 0.035 m³ (50 kg)</p>
+                            <p><span className="text-muted print:text-black font-bold">No. of Cement Bags</span> = {results.cementVol.toFixed(4)} / 0.035</p>
+                            <p className="text-ink print:text-black font-bold text-base mt-2">Total Cement = {results.cementBagsExact.toFixed(2)} Bags</p>
                         </div>
                         <br/>
-                        <div className="border-l-4 border-yellow-500 pl-4 py-1 print:border-black print:border-l-2">
-                            <p className="font-bold text-slate-900 mb-2">Amount of Sand:</p>
-                            <p><span className="text-slate-400 print:text-black font-bold">Sand Volume</span> = ({inputs.ratio} / Sum of Ratio) × Dry Volume</p>
-                            <p><span className="text-slate-400 print:text-black font-bold">Sand Volume</span> = ({inputs.ratio} / {results.sumRatio}) × {results.volMortarDry.toFixed(4)} = <span className="font-bold text-slate-900">{results.sandVol.toFixed(4)} m³</span></p>
-                            <p className="text-xs text-slate-500 italic mt-1 print:text-black">// Note: Density of dry loose sand ≈ 1500 kg/m³</p>
-                            <p><span className="text-slate-400 print:text-black font-bold">Sand Weight (kg)</span> = {results.sandVol.toFixed(4)} × 1500</p>
-                            <p className="text-yellow-600 print:text-black font-bold text-base mt-2">Total Sand = {results.sandKg.toFixed(2)} kg ({results.sandTons.toFixed(2)} Tons)</p>
+                        <div className="border-l-4 border-primary pl-4 py-1 print:border-black print:border-l-2">
+                            <p className="font-bold text-ink mb-2">Amount of Sand:</p>
+                            <p><span className="text-muted print:text-black font-bold">Sand Volume</span> = ({inputs.ratio} / Sum of Ratio) × Dry Volume</p>
+                            <p><span className="text-muted print:text-black font-bold">Sand Volume</span> = ({inputs.ratio} / {results.sumRatio}) × {results.volMortarDry.toFixed(4)} = <span className="font-bold text-ink">{results.sandVol.toFixed(4)} m³</span></p>
+                            <p className="text-xs text-muted italic mt-1 print:text-black">// Note: Density of dry loose sand ≈ 1500 kg/m³</p>
+                            <p><span className="text-muted print:text-black font-bold">Sand Weight (kg)</span> = {results.sandVol.toFixed(4)} × 1500</p>
+                            <p className="text-accent print:text-black font-bold text-base mt-2">Total Sand = {results.sandKg.toFixed(2)} kg ({results.sandTons.toFixed(2)} Tons)</p>
                         </div>
                     </div>
                  </div>
@@ -741,92 +770,92 @@ export default function BricksCalculator() {
 
         {/* Detailed Financial Report View */}
         {results && mode === 'civil' && (
-          <div className="flex-1 flex flex-col bg-slate-50 overflow-hidden relative animate-fade-in print:bg-white print:p-0 print:overflow-visible print:h-auto print:block">
-            <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 bg-slate-50 text-slate-800 print:text-black print:p-0 print:overflow-visible print:h-auto print:w-full">
+          <div className="flex-1 flex flex-col bg-bg overflow-hidden relative animate-fade-in print:bg-white print:p-0 print:overflow-visible print:h-auto print:block">
+            <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 bg-bg text-ink print:text-black print:p-0 print:overflow-visible print:h-auto print:w-full">
                 
-                <div className="border-b-2 border-slate-200 pb-6 mb-8 flex justify-between items-end">
+                <div className="border-b-2 border-line pb-6 mb-8 flex justify-between items-end">
                     <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Project Estimate</h1>
-                        <p className="text-sm text-slate-500 mt-1 font-mono">Generated by CivisMetric Engine</p>
+                        <h2 className="text-3xl font-semibold text-ink tracking-tight">Project Estimate</h2>
+                        <p className="text-sm text-muted mt-1 font-mono">Generated by CivisMetric Engine</p>
                     </div>
                     <div className="text-right">
-                        <p className="text-xs text-slate-400 uppercase font-bold tracking-widest print:text-black">Grand Total</p>
-                        <p className="text-4xl font-black text-emerald-600 font-mono print:text-black">{inputs.currency}{results.grandTotal.toLocaleString('en-US', {maximumFractionDigits: 0})}</p>
+                        <p className="text-xs text-muted font-bold print:text-black">Grand Total</p>
+                        <p className="text-4xl font-semibold text-ink font-mono print:text-black">{inputs.currency}{results.grandTotal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</p>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 print:block">
                     <div className="print:mb-6">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1 print:text-black">Project Specifications</h3>
+                        <h3 className="text-xs font-bold text-muted mb-3 border-b border-line pb-1 print:text-black">Project Specifications</h3>
                         <table className="w-full text-sm">
                             <tbody>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Wall Dimensions</td><td className="py-2 font-medium text-right">{inputs.wallL}×{inputs.wallH}×{inputs.wallT} {unitSystem}</td></tr>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Openings Cutouts ({openings.length})</td><td className="py-2 font-medium text-right text-rose-500 print:text-black">- {results.openings_m2.toFixed(2)} m²</td></tr>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Net Construction Vol</td><td className="py-2 font-medium text-right">{results.volWall.toFixed(2)} m³</td></tr>
-                                <tr><td className="py-2 text-slate-500 print:text-black">Brick Material</td><td className="py-2 font-medium text-right capitalize">{selectedBrick.name}</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Wall Dimensions</th><td className="py-2 font-medium text-right">{inputs.wallL}×{inputs.wallH}×{inputs.wallT} {unitSystem}</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Openings Cutouts ({openings.length})</th><td className="py-2 font-medium text-right text-ink print:text-black">- {results.openings_m2.toFixed(2)} m²</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Net Construction Vol</th><td className="py-2 font-medium text-right">{results.volWall.toFixed(2)} m³</td></tr>
+                                <tr><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Brick Material</th><td className="py-2 font-medium text-right capitalize">{selectedBrick.name}</td></tr>
                             </tbody>
                         </table>
                     </div>
                     <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1 print:text-black">Material Requirements</h3>
+                        <h3 className="text-xs font-bold text-muted mb-3 border-b border-line pb-1 print:text-black">Material Requirements</h3>
                         <table className="w-full text-sm">
                             <tbody>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Exact Bricks Calculated</td><td className="py-2 font-medium text-right">{results.noOfBricksExact.toLocaleString('en-US', {maximumFractionDigits:0})} units</td></tr>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Wastage Buffer</td><td className="py-2 font-medium text-right text-orange-500 print:text-black">+ {inputs.brickWastage}%</td></tr>
-                                <tr className="border-b border-slate-100 print:border-slate-300"><td className="py-2 text-slate-500 print:text-black">Dry Mortar Vol (1:{inputs.ratio})</td><td className="py-2 font-medium text-right">{results.volMortarDry.toFixed(2)} m³</td></tr>
-                                <tr><td className="py-2 text-slate-500 print:text-black">Est. Labor Time</td><td className="py-2 font-medium text-right">{results.laborDays} Crew Days</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Exact Bricks Calculated</th><td className="py-2 font-medium text-right">{results.noOfBricksExact.toLocaleString('en-IN', {maximumFractionDigits:0})} units</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Wastage Buffer</th><td className="py-2 font-medium text-right text-accent print:text-black">+ {inputs.brickWastage}%</td></tr>
+                                <tr className="border-b border-line print:border-slate-300"><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Dry Mortar Vol (1:{inputs.ratio})</th><td className="py-2 font-medium text-right">{results.volMortarDry.toFixed(2)} m³</td></tr>
+                                <tr><th scope="row" className="py-2 font-normal text-left text-muted print:text-black">Est. Labor Time</th><td className="py-2 font-medium text-right">{results.laborDays} Crew Days</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1 print:text-black">Itemized Cost Breakdown</h3>
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-8 print:border-black print:shadow-none">
+                <h3 className="text-xs font-bold text-muted mb-3 border-b border-line pb-1 print:text-black">Itemized Cost Breakdown</h3>
+                <div className="bg-surface border border-line rounded-lg overflow-hidden mb-8 print:border-black print:shadow-none">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider print:bg-transparent print:text-black print:border-b print:border-black">
+                        <thead className="bg-bg text-muted text-xs uppercase tracking-wider print:bg-transparent print:text-black print:border-b print:border-black">
                             <tr>
-                                <th className="p-4 font-semibold">Item Description</th>
-                                <th className="p-4 font-semibold">Quantity</th>
-                                <th className="p-4 font-semibold">Rate</th>
-                                <th className="p-4 font-semibold text-right">Total Amount</th>
+                                <th scope="col" className="p-4 font-semibold">Item Description</th>
+                                <th scope="col" className="p-4 font-semibold">Quantity</th>
+                                <th scope="col" className="p-4 font-semibold">Rate</th>
+                                <th scope="col" className="p-4 font-semibold text-right">Total Amount</th>
                             </tr>
                         </thead>
-                        <tbody className="text-sm divide-y divide-slate-100 print:divide-slate-300">
+                        <tbody className="text-sm divide-y divide-line print:divide-slate-300">
                             <tr>
-                                <td className="p-4"><p className="font-bold text-slate-800">{selectedBrick.name}</p><p className="text-xs text-slate-500 mt-0.5 print:text-black">Includes {inputs.brickWastage}% wastage buffer</p></td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{results.noOfBricksToOrder.toLocaleString()} units</td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{inputs.currency}{inputs.brickPrice}/unit</td>
-                                <td className="p-4 font-mono font-bold text-right text-slate-800">{inputs.currency}{results.costBricks.toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+                                <td className="p-4"><p className="font-bold text-ink">{selectedBrick.name}</p><p className="text-xs text-muted mt-0.5 print:text-black">Includes {inputs.brickWastage}% wastage buffer</p></td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{results.noOfBricksToOrder.toLocaleString('en-IN')} units</td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{inputs.currency}{inputs.brickPrice}/unit</td>
+                                <td className="p-4 font-mono font-bold text-right text-ink">{inputs.currency}{results.costBricks.toLocaleString('en-IN', {maximumFractionDigits: 2})}</td>
                             </tr>
                             <tr>
-                                <td className="p-4"><p className="font-bold text-slate-800">Portland Cement</p><p className="text-xs text-slate-500 mt-0.5 print:text-black">Rounded up to whole 50kg bags</p></td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{results.cementBagsBuy} bags</td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{inputs.currency}{inputs.cementPrice}/bag</td>
-                                <td className="p-4 font-mono font-bold text-right text-slate-800">{inputs.currency}{results.costCement.toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+                                <td className="p-4"><p className="font-bold text-ink">Portland Cement</p><p className="text-xs text-muted mt-0.5 print:text-black">Rounded up to whole 50kg bags</p></td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{results.cementBagsBuy} bags</td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{inputs.currency}{inputs.cementPrice}/bag</td>
+                                <td className="p-4 font-mono font-bold text-right text-ink">{inputs.currency}{results.costCement.toLocaleString('en-IN', {maximumFractionDigits: 2})}</td>
                             </tr>
                             <tr>
-                                <td className="p-4"><p className="font-bold text-slate-800">River Sand</p><p className="text-xs text-slate-500 mt-0.5 print:text-black">Ratio 1 Cement : {inputs.ratio} Sand</p></td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{results.sandTons.toFixed(2)} tons</td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{inputs.currency}{inputs.sandPrice}/ton</td>
-                                <td className="p-4 font-mono font-bold text-right text-slate-800">{inputs.currency}{results.costSand.toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+                                <td className="p-4"><p className="font-bold text-ink">River Sand</p><p className="text-xs text-muted mt-0.5 print:text-black">Ratio 1 Cement : {inputs.ratio} Sand</p></td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{results.sandTons.toFixed(2)} tons</td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{inputs.currency}{inputs.sandPrice}/ton</td>
+                                <td className="p-4 font-mono font-bold text-right text-ink">{inputs.currency}{results.costSand.toLocaleString('en-IN', {maximumFractionDigits: 2})}</td>
                             </tr>
-                            <tr className="bg-slate-50/50 print:bg-transparent">
-                                <td className="p-4"><p className="font-bold text-slate-800">Labor & Crew Operations</p><p className="text-xs text-slate-500 mt-0.5 print:text-black">Est. 600 bricks / crew / day</p></td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{results.laborDays} days</td>
-                                <td className="p-4 font-mono text-slate-600 print:text-black">{inputs.currency}{inputs.laborRate}/day</td>
-                                <td className="p-4 font-mono font-bold text-right text-slate-800">{inputs.currency}{results.costLabor.toLocaleString('en-US', {maximumFractionDigits: 2})}</td>
+                            <tr className="bg-bg print:bg-transparent">
+                                <td className="p-4"><p className="font-bold text-ink">Labor & Crew Operations</p><p className="text-xs text-muted mt-0.5 print:text-black">Est. 600 bricks / crew / day</p></td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{results.laborDays} days</td>
+                                <td className="p-4 font-mono text-ink-2 print:text-black">{inputs.currency}{inputs.laborRate}/day</td>
+                                <td className="p-4 font-mono font-bold text-right text-ink">{inputs.currency}{results.costLabor.toLocaleString('en-IN', {maximumFractionDigits: 2})}</td>
                             </tr>
                         </tbody>
-                        <tfoot className="bg-emerald-50 print:bg-transparent print:border-t-2 print:border-black">
+                        <tfoot className="bg-sunken print:bg-transparent print:border-t-2 print:border-black">
                             <tr>
-                                <td colSpan="3" className="p-4 text-right font-bold text-emerald-800 uppercase tracking-widest text-xs print:text-black">Estimated Grand Total</td>
-                                <td className="p-4 font-mono font-black text-emerald-600 text-xl text-right print:text-black">{inputs.currency}{results.grandTotal.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>
+                                <td colSpan="3" className="p-4 text-right font-bold text-ink text-xs print:text-black">Estimated Grand Total</td>
+                                <td className="p-4 font-mono font-semibold text-ink text-xl text-right print:text-black">{inputs.currency}{results.grandTotal.toLocaleString('en-IN', {maximumFractionDigits: 0})}</td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
                 
-                <p className="text-xs text-slate-400 text-center italic print:hidden">* This is an automated estimate. Actual costs may vary based on site conditions, transportation, and local market fluctuations.</p>
+                <p className="text-xs text-muted text-center italic print:hidden">* This is an automated estimate. Actual costs may vary based on site conditions, transportation, and local market fluctuations.</p>
 
             </div>
           </div>
