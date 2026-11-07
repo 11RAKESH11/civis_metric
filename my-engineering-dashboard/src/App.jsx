@@ -68,7 +68,7 @@ const NavItem = ({ id, icon, label, active, onSelect, indent = false, collapsed 
       aria-label={collapsed ? label : undefined}
       className={`nav-tip relative w-full text-left text-sm rounded-md transition-colors duration-150 flex items-center ${
         collapsed ? 'justify-center h-10' : indent ? 'gap-2 py-1.5 pl-3 pr-3 text-[0.9375rem] font-normal' : 'gap-3 px-3 py-2'
-      } ${active ? 'bg-white/15 text-on-nav font-semibold ring-1 ring-inset ring-white/10' : 'text-on-nav hover:bg-white/10'}`}
+      } ${active ? `bg-white/15 text-on-nav ${indent ? '' : 'font-semibold'} ring-1 ring-inset ring-white/10` : 'text-on-nav hover:bg-white/10'}`}
     >
       {active && <span aria-hidden="true" className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r bg-stripe" />}
       {!indent && <ToolIcon id={icon ?? id} className="w-[18px] h-[18px] shrink-0" />}
@@ -374,7 +374,7 @@ const App = () => {
           <UserChip userId={userId} />
         </header>
 
-        <div ref={contentRef} className="flex-1 lg:min-h-0 lg:overflow-y-auto custom-scroll p-4 sm:p-6 lg:p-8">
+        <div ref={contentRef} className={`flex-1 lg:min-h-0 lg:overflow-y-auto custom-scroll ${tool?.id === 'cad-studio' ? 'p-2 sm:p-3' : 'p-4 sm:p-6 lg:p-8'}`}>
           {tool ? (
             <Suspense fallback={<p className="text-sm text-muted">Loading {tool.label.toLowerCase()}…</p>}>
               <CalculatorFrame key={tool.id}>

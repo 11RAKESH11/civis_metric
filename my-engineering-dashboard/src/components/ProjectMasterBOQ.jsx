@@ -109,22 +109,22 @@ export default function ProjectMasterBOQ() {
     <div className="flex flex-col w-full pb-10 space-y-6 text-ink font-sans">
       
       {/* ── PROJECT HEADER & LETTERHEAD ── */}
-      <div className="relative overflow-hidden rounded-lg bg-bg border border-line p-5 sm:p-7">
+      <div className="relative overflow-hidden rounded-2xl bg-bg border border-line p-5 shadow-e1 sm:p-8">
         <div className="absolute inset-0 blueprint-grid opacity-30 pointer-events-none"></div>
 
-        <div className="relative z-10 flex flex-col wide:flex-row justify-between items-start wide:items-center gap-6">
+        <div className="relative z-10 flex flex-col gap-6">
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-sunken border border-line-control text-ink text-xs font-bold font-mono">
+              <span className="px-3.5 py-1 rounded-full bg-primary/15 border border-line-control text-ink text-xs font-bold uppercase tracking-wider">
                 CPWD / DSR Standard Schedule of Rates (SOR)
               </span>
-              <span className="text-xs font-mono text-muted">Ref: {projectRef}</span>
+              <span className="text-sm font-semibold tabular-nums text-ink">Ref: {projectRef}</span>
             </div>
 
             {isEditingInfo ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 max-w-3xl">
                 <div>
-                  <label htmlFor="projectmasterboq-field-0" className="text-xs font-bold text-muted font-mono">Project Name</label>
+                  <label htmlFor="projectmasterboq-field-0" className="text-xs font-bold uppercase tracking-wider text-ink">Project Name</label>
                   <input id="projectmasterboq-field-0"
                     type="text"
                     value={projectName}
@@ -133,7 +133,7 @@ export default function ProjectMasterBOQ() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="projectmasterboq-field-1" className="text-xs font-bold text-muted font-mono">Client / Owner</label>
+                  <label htmlFor="projectmasterboq-field-1" className="text-xs font-bold uppercase tracking-wider text-ink">Client / Owner</label>
                   <input id="projectmasterboq-field-1"
                     type="text"
                     value={clientName}
@@ -142,7 +142,7 @@ export default function ProjectMasterBOQ() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="projectmasterboq-field-2" className="text-xs font-bold text-muted font-mono">Site Location</label>
+                  <label htmlFor="projectmasterboq-field-2" className="text-xs font-bold uppercase tracking-wider text-ink">Site Location</label>
                   <input id="projectmasterboq-field-2"
                     type="text"
                     value={siteLocation}
@@ -151,7 +151,7 @@ export default function ProjectMasterBOQ() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="projectmasterboq-field-3" className="text-xs font-bold text-muted font-mono">Engineer in Charge</label>
+                  <label htmlFor="projectmasterboq-field-3" className="text-xs font-bold uppercase tracking-wider text-ink">Engineer in Charge</label>
                   <input id="projectmasterboq-field-3"
                     type="text"
                     value={engineerInCharge}
@@ -162,11 +162,11 @@ export default function ProjectMasterBOQ() {
               </div>
             ) : (
               <div>
-                <h2 className="text-2xl sm:text-3xl font-semibold text-ink tracking-tight">
+                <h2 className="text-3xl sm:text-4xl font-bold text-ink tracking-tight leading-tight">
                   {projectName}
                 </h2>
-                <p className="text-xs text-muted mt-1">
-                  Client: <strong className="text-ink">{clientName}</strong> · Location: <span className="text-ink-2">{siteLocation}</span> · Engr: <span className="text-primary">{engineerInCharge}</span>
+                <p className="text-sm sm:text-base text-ink mt-2 leading-relaxed">
+                  Client: <strong className="text-ink">{clientName}</strong> · Location: <span>{siteLocation}</span> · Engr: <strong className="text-primary">{engineerInCharge}</strong>
                 </p>
               </div>
             )}
@@ -176,21 +176,21 @@ export default function ProjectMasterBOQ() {
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <button
               onClick={() => setIsEditingInfo(!isEditingInfo)}
-              className="px-3 py-2 bg-surface hover:bg-sunken border border-line rounded-lg text-xs font-bold text-ink-2 hover:text-ink transition-all"
+              className="px-4 py-2.5 bg-surface hover:bg-sunken border border-line rounded-xl text-sm font-semibold text-ink transition-all"
             >
-              {isEditingInfo ? '✓ Save Info' : 'Edit Project Info'}
+              {isEditingInfo ? 'Save Info' : 'Edit Project Info'}
             </button>
 
             <button
               onClick={() => setShowAddModal(true)}
-              className="px-3.5 py-2 bg-primary hover:bg-sunken text-on-primary rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-primary hover:bg-primary-hover text-on-primary rounded-xl text-sm font-semibold shadow-e1 transition-all flex items-center gap-1.5"
             >
               <span>+</span> Add Custom Line Item
             </button>
 
             <button
               onClick={exportToCSV}
-              className="px-3.5 py-2 bg-sunken hover:bg-primary text-ink hover:text-ink border border-line-control rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-surface hover:bg-primary/15 text-ink border border-line-control rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5"
               title="Download Excel / CSV Workbook"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -201,7 +201,7 @@ export default function ProjectMasterBOQ() {
 
             <button
               onClick={() => window.print()}
-              className="px-3.5 py-2 bg-surface hover:bg-sunken border border-line rounded-lg text-xs font-bold text-ink transition-all flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-surface hover:bg-sunken border border-line rounded-xl text-sm font-semibold text-ink transition-all flex items-center gap-1.5"
               title="Print Official Stamp PDF"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -215,39 +215,39 @@ export default function ProjectMasterBOQ() {
         {/* Financial KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-line">
           <div className="stat-card">
-            <span className="text-xs font-mono font-bold text-muted">Total Line Items</span>
-            <p className="text-xl font-semibold text-primary mt-1 font-mono">{lineItems.length}</p>
-            <span className="text-xs text-muted">Live BOQ Schedule</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-ink">Total Line Items</span>
+            <p className="text-2xl font-bold text-primary mt-2 tabular-nums">{lineItems.length}</p>
+            <span className="text-sm text-ink">Live BOQ schedule</span>
           </div>
 
           <div className="stat-card">
-            <span className="text-xs font-mono font-bold text-muted">Direct Civil Subtotal</span>
-            <p className="text-xl font-semibold text-primary mt-1 font-mono">
+            <span className="text-xs font-bold uppercase tracking-wider text-ink">Direct Civil Subtotal</span>
+            <p className="text-2xl font-bold text-primary mt-2 tabular-nums">
               {currency}{subtotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </p>
-            <span className="text-xs text-muted">Base Material & Labour</span>
+            <span className="text-sm text-ink">Base material and labour</span>
           </div>
 
           <div className="stat-card">
-            <span className="text-xs font-mono font-bold text-muted">Taxes & GST (18%)</span>
-            <p className="text-xl font-semibold text-accent mt-1 font-mono">
+            <span className="text-xs font-bold uppercase tracking-wider text-ink">Taxes & GST (18%)</span>
+            <p className="text-2xl font-bold text-accent mt-2 tabular-nums">
               {currency}{gstAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </p>
-            <span className="text-xs text-muted">Includes 1% Labour Cess</span>
+            <span className="text-sm text-ink">Includes 1% labour cess</span>
           </div>
 
-          <div className="stat-card bg-sunken border-line-control">
-            <span className="text-xs font-mono font-bold text-ink">Turnkey Total Estimate</span>
-            <p className="text-xl font-semibold text-ink mt-1 font-mono">
+          <div className="stat-card bg-primary/15 border-primary">
+            <span className="text-xs tabular-nums font-bold text-ink">Turnkey Total Estimate</span>
+            <p className="text-2xl font-bold text-ink mt-2 tabular-nums">
               {currency}{grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </p>
-            <span className="text-xs text-ink">With Contractor Margin</span>
+            <span className="text-sm text-ink">With contractor margin</span>
           </div>
         </div>
       </div>
 
       {/* ── BOQ SCHEDULE OF RATES TABLE ── */}
-      <div className="bg-surface border border-line rounded-lg p-5 sm:p-6 space-y-4">
+      <div className="bg-surface border border-line rounded-2xl shadow-e1 p-5 sm:p-6 space-y-4">
         
         {/* Table Top Controls */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-line">
@@ -255,7 +255,7 @@ export default function ProjectMasterBOQ() {
             <h2 className="text-base font-semibold text-ink tracking-tight">
               Schedule of Civil Quantities
             </h2>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-sunken text-ink-2 border border-line">
+            <span className="text-xs tabular-nums px-2 py-0.5 rounded-full bg-sunken text-ink-2 border border-line">
               {filteredItems.length} items
             </span>
           </div>
@@ -281,9 +281,9 @@ export default function ProjectMasterBOQ() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-sm border-collapse">
               <thead>
-                <tr className="border-b border-line text-xs font-mono text-muted bg-sunken">
+                <tr className="border-b border-line text-xs font-bold uppercase tracking-wider text-ink bg-sunken">
                   <th scope="col" className="py-3 px-3 w-12">#</th>
                   <th scope="col" className="py-3 px-3">Trade / Category</th>
                   <th scope="col" className="py-3 px-3 min-w-[240px]">Work Description & Specifications</th>
@@ -297,29 +297,29 @@ export default function ProjectMasterBOQ() {
               <tbody className="divide-y divide-line">
                 {filteredItems.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-sunken transition-colors group">
-                    <td className="py-3 px-3 font-mono text-muted">{idx + 1}</td>
+                    <td className="py-3 px-3 tabular-nums text-muted">{idx + 1}</td>
                     <td className="py-3 px-3">
-                      <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-sunken border border-line text-primary">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/15 border border-line text-ink">
                         {item.category}
                       </span>
                     </td>
                     <td className="py-3 px-3 text-ink font-medium leading-relaxed">
                       {item.description}
-                      <span className="block text-xs text-muted font-mono mt-0.5">Source: {item.module} · Added: {item.date}</span>
+                      <span className="block text-xs text-ink mt-1">Source: {item.module} · Added: {item.date}</span>
                     </td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-ink">{item.quantity.toLocaleString('en-IN')}</td>
-                    <td className="py-3 px-3 text-center font-mono text-muted text-xs">{item.unit}</td>
-                    <td className="py-3 px-3 text-right font-mono text-ink-2">{item.rate.toLocaleString('en-IN')}</td>
-                    <td className="py-3 px-3 text-right font-mono font-semibold text-ink">
+                    <td className="py-3 px-3 text-right tabular-nums font-bold text-ink">{item.quantity.toLocaleString('en-IN')}</td>
+                    <td className="py-3 px-3 text-center text-ink text-sm">{item.unit}</td>
+                    <td className="py-3 px-3 text-right tabular-nums text-ink">{item.rate.toLocaleString('en-IN')}</td>
+                    <td className="py-3 px-3 text-right tabular-nums font-semibold text-ink">
                       {item.cost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td className="py-3 px-3 text-center">
                       <button
                         onClick={() => removeItemFromProject(item.id)}
-                        className="p-1.5 text-muted hover:text-error hover:bg-primary/10 rounded-lg transition-colors"
+                        className="px-2.5 py-1 text-sm font-semibold text-ink hover:text-error hover:bg-primary/10 rounded-lg transition-colors"
                         title="Delete Item"
                       >
-                        ✕
+                        Remove
                       </button>
                     </td>
                   </tr>
@@ -334,11 +334,11 @@ export default function ProjectMasterBOQ() {
           <div className="pt-3 border-t border-line flex justify-between items-center text-xs">
             <button
               onClick={clearProjectItems}
-              className="text-error hover:text-error text-xs font-mono hover:underline"
+              className="text-error hover:text-error text-xs tabular-nums hover:underline"
             >
               Clear Entire Project Ledger
             </button>
-            <span className="text-muted text-xs font-mono">
+            <span className="text-muted text-xs tabular-nums">
               Auto-saved to active engineering session
             </span>
           </div>
@@ -349,73 +349,73 @@ export default function ProjectMasterBOQ() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Left: Financial Coefficients Adjuster */}
-        <div className="bg-surface border border-line rounded-lg p-5 sm:p-6 space-y-4">
-          <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+        <div className="bg-surface border border-line rounded-2xl shadow-e1 p-5 sm:p-6 space-y-4">
+          <h3 className="text-base font-semibold text-ink flex items-center gap-2">
 Financial & Tax Parameters
           </h3>
-          <p className="text-xs text-muted leading-relaxed">
+          <p className="text-sm text-ink leading-relaxed">
             Adjust contractor overheads, contingencies, and statutory GST rates to reflect actual tender terms.
           </p>
 
           <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between bg-sunken p-3 rounded-lg border border-line">
+            <div className="flex items-center justify-between bg-bg p-4 rounded-xl border border-line">
               <div>
-                <span className="text-xs font-bold text-ink block">Contractor Overhead & Profit</span>
-                <span className="text-xs text-muted font-mono">Standard industry margin (10%–15%)</span>
+                <span className="text-sm font-semibold text-ink block">Contractor Overhead & Profit</span>
+                <span className="text-xs text-ink">Standard industry margin (10%–15%)</span>
               </div>
               <div className="flex items-center gap-1 bg-surface border border-line rounded-lg px-2 py-1">
                 <input aria-label="Standard industry margin (10%–15%)"
                   type="number"
                   value={contractorMargin}
                   onChange={e => setContractorMargin(Number(e.target.value))}
-                  className="w-12 bg-transparent text-right text-xs font-mono font-bold text-primary outline-none"
+                  className="w-14 bg-transparent text-right text-base tabular-nums font-bold text-primary outline-none"
                 />
-                <span className="text-xs text-muted">%</span>
+                <span className="text-sm font-semibold text-ink">%</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between bg-sunken p-3 rounded-lg border border-line">
+            <div className="flex items-center justify-between bg-bg p-4 rounded-xl border border-line">
               <div>
-                <span className="text-xs font-bold text-ink block">Unforeseen Site Contingency</span>
-                <span className="text-xs text-muted font-mono">Material price fluctuation allowance</span>
+                <span className="text-sm font-semibold text-ink block">Unforeseen Site Contingency</span>
+                <span className="text-xs text-ink">Material price fluctuation allowance</span>
               </div>
               <div className="flex items-center gap-1 bg-surface border border-line rounded-lg px-2 py-1">
                 <input aria-label="Material price fluctuation allowance"
                   type="number"
                   value={contingencyRate}
                   onChange={e => setContingencyRate(Number(e.target.value))}
-                  className="w-12 bg-transparent text-right text-xs font-mono font-bold text-accent outline-none"
+                  className="w-14 bg-transparent text-right text-base tabular-nums font-bold text-accent outline-none"
                 />
-                <span className="text-xs text-muted">%</span>
+                <span className="text-sm font-semibold text-ink">%</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between bg-sunken p-3 rounded-lg border border-line">
+            <div className="flex items-center justify-between bg-bg p-4 rounded-xl border border-line">
               <div>
-                <span className="text-xs font-bold text-ink block">Goods & Services Tax (GST)</span>
-                <span className="text-xs text-muted font-mono">Applicable construction contract tax</span>
+                <span className="text-sm font-semibold text-ink block">Goods & Services Tax (GST)</span>
+                <span className="text-xs text-ink">Applicable construction contract tax</span>
               </div>
               <div className="flex items-center gap-1 bg-surface border border-line rounded-lg px-2 py-1">
                 <input aria-label="Applicable construction contract tax"
                   type="number"
                   value={gstRate}
                   onChange={e => setGstRate(Number(e.target.value))}
-                  className="w-12 bg-transparent text-right text-xs font-mono font-bold text-error outline-none"
+                  className="w-14 bg-transparent text-right text-base tabular-nums font-bold text-error outline-none"
                 />
-                <span className="text-xs text-muted">%</span>
+                <span className="text-sm font-semibold text-ink">%</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Right: Bill of Quantities Abstract Certificate */}
-        <div className="bg-surface border border-line rounded-lg p-5 sm:p-6 flex flex-col justify-between space-y-4">
+        <div className="bg-surface border border-line rounded-2xl shadow-e1 p-5 sm:p-6 flex flex-col justify-between space-y-4">
           <div>
             <div className="flex justify-between items-center pb-3 border-b border-line">
-              <h3 className="text-sm font-semibold text-ink font-mono">
+              <h3 className="text-base font-semibold text-ink tabular-nums">
                 Bill Abstract Summary
               </h3>
-              <span className="text-xs font-mono text-ink font-bold">READY FOR TENDER</span>
+              <span className="text-xs tabular-nums text-ink font-bold">READY FOR TENDER</span>
             </div>
 
             <div className="space-y-2.5 pt-3 text-xs">
@@ -442,14 +442,14 @@ Financial & Tax Parameters
 
               <div className="pt-3 border-t border-line flex justify-between items-center text-sm">
                 <span className="font-semibold text-ink">Turnkey Total</span>
-                <span className="text-xl font-semibold text-ink font-mono">
+                <span className="text-xl font-semibold text-ink tabular-nums">
                   {currency}{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-line text-xs text-muted font-mono flex justify-between items-center">
+          <div className="pt-3 border-t border-line text-xs text-muted tabular-nums flex justify-between items-center">
             <span>Engineering Signature: Verified</span>
             <span>CivisMetric Civil Suite</span>
           </div>
@@ -462,7 +462,7 @@ Financial & Tax Parameters
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
           <div className="bg-surface border border-line rounded-lg p-6 max-w-lg w-full space-y-4 animate-fade-in">
             <div className="flex justify-between items-center pb-3 border-b border-line">
-              <h3 className="text-sm font-semibold text-ink">
+              <h3 className="text-base font-semibold text-ink">
                 Add Custom Work Item to Project
               </h3>
               <button onClick={() => setShowAddModal(false)} className="text-muted hover:text-ink">✕</button>
@@ -470,7 +470,7 @@ Financial & Tax Parameters
 
             <form onSubmit={handleAddNewItem} className="space-y-3.5 text-xs">
               <div>
-                <label htmlFor="projectmasterboq-field-4" className="block text-xs font-bold text-muted font-mono mb-1">Trade Category</label>
+                <label htmlFor="projectmasterboq-field-4" className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">Trade Category</label>
                 <select id="projectmasterboq-field-4"
                   value={newItemCategory}
                   onChange={e => setNewItemCategory(e.target.value)}
@@ -486,7 +486,7 @@ Financial & Tax Parameters
               </div>
 
               <div>
-                <label htmlFor="projectmasterboq-field-5" className="block text-xs font-bold text-muted font-mono mb-1">Specification / Description</label>
+                <label htmlFor="projectmasterboq-field-5" className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">Specification / Description</label>
                 <textarea id="projectmasterboq-field-5"
                   required
                   rows={2}
@@ -499,7 +499,7 @@ Financial & Tax Parameters
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label htmlFor="projectmasterboq-field-6" className="block text-xs font-bold text-muted font-mono mb-1">Quantity</label>
+                  <label htmlFor="projectmasterboq-field-6" className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">Quantity</label>
                   <input id="projectmasterboq-field-6"
                     type="number"
                     step="any"
@@ -507,22 +507,22 @@ Financial & Tax Parameters
                     value={newItemQty}
                     onChange={e => setNewItemQty(e.target.value)}
                     placeholder="100"
-                    className="w-full bg-sunken border border-line rounded-lg px-3 py-2 text-ink outline-none focus:border-primary font-mono"
+                    className="w-full bg-sunken border border-line rounded-lg px-3 py-2 text-ink outline-none focus:border-primary tabular-nums"
                   />
                 </div>
                 <div>
-                  <label htmlFor="projectmasterboq-field-7" className="block text-xs font-bold text-muted font-mono mb-1">Unit</label>
+                  <label htmlFor="projectmasterboq-field-7" className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">Unit</label>
                   <input id="projectmasterboq-field-7"
                     type="text"
                     required
                     value={newItemUnit}
                     onChange={e => setNewItemUnit(e.target.value)}
                     placeholder="m³, kg, Nos"
-                    className="w-full bg-sunken border border-line rounded-lg px-3 py-2 text-ink outline-none focus:border-primary font-mono"
+                    className="w-full bg-sunken border border-line rounded-lg px-3 py-2 text-ink outline-none focus:border-primary tabular-nums"
                   />
                 </div>
                 <div>
-                  <label htmlFor="projectmasterboq-field-8" className="block text-xs font-bold text-muted font-mono mb-1">Rate ({currency})</label>
+                  <label htmlFor="projectmasterboq-field-8" className="block text-xs font-bold uppercase tracking-wider text-ink mb-1">Rate ({currency})</label>
                   <input id="projectmasterboq-field-8"
                     type="number"
                     step="any"
@@ -530,7 +530,7 @@ Financial & Tax Parameters
                     value={newItemRate}
                     onChange={e => setNewItemRate(e.target.value)}
                     placeholder="450"
-                    className="w-full bg-sunken border border-line rounded-lg px-3 py-2 text-ink outline-none focus:border-primary font-mono"
+                    className="w-full bg-sunken border border-line rounded-lg px-3 py-2 text-ink outline-none focus:border-primary tabular-nums"
                   />
                 </div>
               </div>

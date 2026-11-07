@@ -100,6 +100,22 @@ const COMPONENT_CATEGORIES = [
 // Shared fallback for missing element lists: a stable reference, not a new array per render.
 const EMPTY = [];
 
+// CAD Studio drawing board: deep slate-green surfaces; the orange accent comes from the app tokens.
+const CAD_DARK = { '--c-sunken': '16 30 34', '--c-border': '36 62 68', '--c-border-control': '30 120 112' };
+
+// Drag grip used by every resize handle: a small pill with three dots that lights up teal on hover and while dragging,
+// plus a thin guide line along the edge it moves.
+function ResizeGrip({ vertical }) {
+  return (
+    <>
+      <span aria-hidden="true" className={`pointer-events-none absolute bg-primary opacity-0 shadow-[0_0_10px_rgb(var(--c-primary)/0.6)] transition-opacity group-hover:opacity-80 group-active:opacity-100 ${vertical ? 'inset-y-0 left-1/2 w-0.5 -translate-x-1/2' : 'inset-x-0 top-1/2 h-0.5 -translate-y-1/2'}`} />
+      <span aria-hidden="true" className={`pointer-events-none relative flex items-center justify-center gap-[3px] rounded-full border border-[#2a4a50] bg-[#10222a] shadow-e1 transition-all group-hover:border-primary group-hover:bg-[#12303a] group-active:scale-110 group-active:border-primary ${vertical ? 'h-11 w-3.5 flex-col' : 'h-3.5 w-11'}`}>
+        {[0, 1, 2].map((i) => <span key={i} className="h-[3px] w-[3px] rounded-full bg-[#8fb5ba] transition-colors group-hover:bg-primary group-active:bg-primary" />)}
+      </span>
+    </>
+  );
+}
+
 export default function CadStudio() {
   const {
     cadElements: contextElements,
@@ -138,6 +154,8 @@ export default function CadStudio() {
   const [pan, setPan] = useState({ x: 35, y: 30 });
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef(null);
+  const spaceDown = useRef(false);
+  const viewRef = useRef({ zoom: 1.1, pan: { x: 35, y: 30 } });
 
   // ── Active Tool & Category Drawer
   const [activeTool, setActiveTool] = useState('select');
@@ -158,6 +176,24 @@ export default function CadStudio() {
 
   // ── Sidebars & Overlays
   const [showTemplates, setShowTemplates] = useState(false);
+  // Height of the toolbar block; null = fit its content. Dragging the handle under it trades toolbar space for canvas.
+  const [toolsH, setToolsH] = useState(null);
+  const toolsRef = useRef(null);
+  const dragTools = useRef(null);
+  // Overall height of the whole studio; null = fill the page. Dragged from the grip under the status bar.
+  const [studioH, setStudioH] = useState(null);
+  const studioRef = useRef(null);
+  const dragStudio = useRef(null);
+  // Workspace width and left offset (null = fill the page), set by dragging the left or right edge.
+  const [studioW, setStudioW] = useState(null);
+  const [studioML, setStudioML] = useState(0);
+  const dragSide = useRef(null);
+  // Width of the Building Schedule side panel, resized by dragging its left edge.
+  const [scheduleW, setScheduleW] = useState(320);
+  const dragSchedule = useRef(null);
+  // Width of the element library rail on the left (md and up).
+  const [railW, setRailW] = useState(264);
+  const dragRail = useRef(null);
   const [showSchedule, setShowSchedule] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
   const [cmdLog, setCmdLog] = useState([
@@ -360,7 +396,7 @@ export default function CadStudio() {
 
   // ── Canvas Mouse Down Handler
   const handleMouseDown = (e) => {
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    if (e.button === 1 || (e.button === 0 && (e.altKey || spaceDown.current))) {
       setIsPanning(true);
       panStart.current = { mx: e.clientX, my: e.clientY, px: pan.x, py: pan.y };
       return;
@@ -371,6 +407,9 @@ export default function CadStudio() {
     if (activeTool === 'select') {
       setSelectedEl(null);
       setSelectedGrip(null);
+      // Dragging empty canvas pans the drawing.
+      setIsPanning(true);
+      panStart.current = { mx: e.clientX, my: e.clientY, px: pan.x, py: pan.y };
       return;
     }
 
@@ -642,7 +681,7 @@ export default function CadStudio() {
     if (windowsList.length > 0) addItemToProject({ category: 'Joinery & Woodwork', module: 'CAD Studio', description: `UPVC Glazed Windows`, quantity: windowsList.length, unit: 'Sets', rate: 6200, cost: windowsList.length * 6200 });
     if (totalCarpet > 0) addItemToProject({ category: 'Finishes & Flooring', module: 'CAD Studio', description: `Floor Finishes (${totalCarpet.toFixed(1)} m²)`, quantity: Number(totalCarpet.toFixed(1)), unit: 'm²', rate: 1450, cost: totalCarpet * 1450 });
 
-    showToast(`✓ Exported building takeoff directly to Master BOQ!`);
+    showToast(`Exported building takeoff to Project BOQ`);
     log('Building takeoff synchronized with Master BOQ.');
   };
 
@@ -808,229 +847,357 @@ export default function CadStudio() {
     if (!el) return;
     const onWheel = (e) => {
       e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.12 : 0.89;
-      setZoom((prev) => Math.min(4, Math.max(0.3, prev * factor)));
+      const { zoom: z, pan: p } = viewRef.current;
+      const nz = Math.min(4, Math.max(0.3, z * (e.deltaY < 0 ? 1.12 : 0.89)));
+      const k = nz / z;
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      // Zoom about the pointer, so the point under the cursor stays put.
+      setZoom(nz);
+      setPan({ x: mx - (mx - p.x) * k, y: my - (my - p.y) * k });
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
+  useEffect(() => { viewRef.current = { zoom, pan }; }, [zoom, pan]);
+
+  // Hold Space to pan with any tool; finish a pan even if the mouse is released outside the canvas.
+  useEffect(() => {
+    const typing = (t) => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    const down = (e) => { if (e.code === 'Space' && !typing(e.target)) { spaceDown.current = true; e.preventDefault(); } };
+    const up = (e) => { if (e.code === 'Space') spaceDown.current = false; };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, []);
+
+  useEffect(() => {
+    if (!isPanning) return undefined;
+    const end = () => { setIsPanning(false); panStart.current = null; };
+    window.addEventListener('mouseup', end);
+    return () => window.removeEventListener('mouseup', end);
+  }, [isPanning]);
+
+  const zoomBy = (factor) => {
+    const el = containerRef.current;
+    const { zoom: z, pan: p } = viewRef.current;
+    const nz = Math.min(4, Math.max(0.3, z * factor));
+    const k = nz / z;
+    const w = el ? el.clientWidth / 2 : 0;
+    const h = el ? el.clientHeight / 2 : 0;
+    setZoom(nz);
+    setPan({ x: w - (w - p.x) * k, y: h - (h - p.y) * k });
+  };
+  const resetView = () => { setZoom(1.1); setPan({ x: 35, y: 30 }); };
+
   // The drafting board is dark in both themes: "dark" scopes the palette tokens inside it.
   return (
-    <div className="dark flex flex-col w-full h-full select-none text-ink font-sans bg-[#080c16] rounded-lg overflow-hidden">
+    <div ref={studioRef} style={{ ...(studioH == null ? null : { height: studioH, minHeight: 0 }), ...(studioW == null ? null : { width: studioW, maxWidth: 'none', flexShrink: 0, marginLeft: studioML }), '--rail-w': railW + 'px' }} className="relative flex flex-col md:flex-row gap-4 w-full h-full min-h-[calc(100svh-5rem)] lg:min-h-0 select-none text-ink font-sans">
+      {['left', 'right'].map((side) => (
+        <div
+          key={side}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={`Resize workspace from the ${side}`}
+          title="Drag to resize the width. Double-click to reset."
+          onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ } dragSide.current = { side, x: e.clientX, w: studioRef.current ? studioRef.current.offsetWidth : 0, ml: studioML }; }}
+          onPointerMove={(e) => {
+            const d = dragSide.current;
+            if (!d) return;
+            const dx = e.clientX - d.x;
+            if (d.side === 'right') {
+              setStudioW(Math.max(480, Math.min(2600, d.w + dx)));
+            } else {
+              // Left edge: moving it right narrows the workspace; moving it back left (never past the page edge) widens it again.
+              const ml = Math.max(0, d.ml + dx);
+              setStudioML(ml);
+              setStudioW(Math.max(480, Math.min(2600, d.w - (ml - d.ml))));
+            }
+          }}
+          onPointerUp={() => { dragSide.current = null; }}
+          onPointerCancel={() => { dragSide.current = null; }}
+          onDoubleClick={() => { setStudioW(null); setStudioML(0); }}
+          className={`group absolute inset-y-0 z-30 flex w-4 cursor-col-resize touch-none items-center justify-center ${side === 'left' ? 'left-0' : 'right-0'}`}
+        >
+          <ResizeGrip vertical />
+        </div>
+      ))}
 
-      {/* ═══════════════════ TOP COMMAND HEADER ═══════════════════ */}
-      <div className="shrink-0 bg-[#080c16] border-b border-[#1e293b] px-3 py-2 flex items-center justify-between gap-3 flex-wrap">
-        
-        <div className="flex items-center gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <input aria-label="Project title"
-                type="text"
-                value={projectTitle || 'CivisMetric Project'}
-                onChange={(e) => setProjectTitle && setProjectTitle(e.target.value)}
-                className="bg-transparent text-sm font-bold text-ink outline-none border-b border-transparent hover:border-line focus:border-primary transition-all w-60 truncate"
-              />
-              <span className="text-xs bg-sunken text-primary px-2 py-0.5 rounded font-mono font-bold border border-line-control">
-                BIM Level 2
-              </span>
-            </div>
-            <p className="text-xs text-muted font-mono">
-              Built-up: <strong className="text-primary">{metrics.builtupM2}m²</strong> · Carpet: <strong className="text-ink">{metrics.carpetM2}m²</strong> · {metrics.cols} Cols · {metrics.fdns} Footings
-            </p>
-          </div>
+      {/* ═══════════════════ ELEMENT LIBRARY (left card) ═══════════════════ */}
+      <aside className="relative z-10 flex max-h-72 w-full shrink-0 flex-col gap-4 rounded-lg border border-line bg-surface p-5 md:max-h-none md:w-[var(--rail-w)]" aria-label="Element library">
+        <div className="flex shrink-0 items-center justify-between border-b border-line pb-3">
+          <h2 className="text-sm font-semibold text-ink">Element library</h2>
+          <span className="whitespace-nowrap text-xs font-medium text-ink">{COMPONENT_CATEGORIES.reduce((n, c) => n + c.tools.length, 0)} tools</span>
         </div>
 
-        {/* Discipline Filter Tabs (No Visual Clutter) */}
-        <div className="flex bg-[#0b1120] rounded-lg border border-[#1e293b] p-0.5">
-          {DISCIPLINES.map(d => (
-            <button
-              key={d.id}
-              onClick={() => setActiveDiscipline(d.id)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeDiscipline === d.id
-                  ? 'bg-primary text-on-primary '
-                  : 'text-muted hover:text-ink'
-              }`}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+        <div className="custom-scroll min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+          <button
+            onClick={() => setActiveTool('select')}
+            className={`flex h-11 w-full items-center gap-2.5 rounded-lg px-3.5 text-sm font-semibold transition-all ${activeTool === 'select' ? 'bg-primary text-on-primary shadow-e1' : 'border border-line bg-surface text-ink hover:bg-sunken'}`}
+          >
+            Select / Move
+          </button>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {toastMsg && (
-            <span className="text-xs font-bold text-ink bg-sunken border border-line-control px-3 py-1 rounded-lg animate-fade-in">
-              {toastMsg}
-            </span>
-          )}
-
-          {/* Templates Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowTemplates(p => !p)}
-              className="px-3 py-1.5 bg-[#0f172a] hover:bg-sunken border border-line rounded-lg text-xs font-mono font-bold text-ink transition-all flex items-center gap-1"
-            >
-Templates <ChevronDownIcon />
-            </button>
-            {showTemplates && templatesList && (
-              <div className="absolute right-0 mt-2 w-72 bg-[#0b1120] border border-line rounded-lg p-2 z-50 space-y-1 font-sans">
-                {Object.entries(templatesList).map(([key, t]) => (
+          <div className="space-y-1.5">
+            {COMPONENT_CATEGORIES.map((c) => {
+              const open = activeDrawerCat === c.cat;
+              return (
+                <div key={c.cat} className={`rounded-lg border transition-colors ${open ? 'border-line-control bg-sunken' : 'border-line bg-surface'}`}>
                   <button
-                    key={key}
-                    onClick={() => { if (loadTemplate) loadTemplate(key); setShowTemplates(false); showToast(`Loaded ${t.name}`); }}
-                    className={`w-full text-left p-2 rounded-lg text-xs transition-all ${activeTemplate === key ? 'bg-sunken text-primary border border-line-control' : 'hover:bg-sunken text-ink-2'}`}
+                    onClick={() => setActiveDrawerCat(c.cat)}
+                    aria-expanded={open}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink transition-colors hover:bg-sunken"
                   >
-                    <p className="font-bold">{t.name}</p>
-                    <p className="text-xs text-muted truncate">{t.description}</p>
+                    <span>{c.title}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="rounded-full border border-line bg-surface px-2 py-0.5 text-xs font-semibold tabular-nums text-ink">{c.tools.length}</span>
+                      <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="grid grid-cols-1 gap-1.5 px-2 pb-2">
+                      {c.tools.map((tool) => (
+                        <button
+                          key={tool.id}
+                          onClick={() => setActiveTool(tool.id)}
+                          title={`${tool.name} · ${tool.hint}`}
+                          className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-all ${
+                            activeTool === tool.id
+                              ? 'border-primary bg-primary text-on-primary shadow-e1'
+                              : 'border-line bg-surface text-ink hover:border-line-control hover:bg-sunken'
+                          }`}
+                        >
+                          <CadToolIcon id={tool.id} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{tool.name}</span>
+                            <span className="block truncate text-xs font-normal text-ink">{tool.hint}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {selectedEl && (
+            <div className="space-y-2 rounded-lg border border-line-control bg-sunken p-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-ink">Selected: {selectedEl.category}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={handleRotateSelected} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface text-sm font-semibold text-ink hover:bg-primary hover:text-on-primary">
+                  <RotateIcon /> 90&deg;
+                </button>
+                <button onClick={handleDeleteSelected} className="h-9 rounded-lg border border-line bg-surface text-sm font-semibold text-error hover:bg-error hover:text-ink">
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Drag this grip, in the gap between the cards, to change the library width */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize element library"
+          title="Drag to resize. Double-click to reset."
+          onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ } dragRail.current = { x: e.clientX, w: railW }; }}
+          onPointerMove={(e) => { const d = dragRail.current; if (d) setRailW(Math.max(220, Math.min(480, d.w + e.clientX - d.x))); }}
+          onPointerUp={() => { dragRail.current = null; }}
+          onPointerCancel={() => { dragRail.current = null; }}
+          onDoubleClick={() => setRailW(264)}
+          className="group absolute -right-4 inset-y-0 hidden w-4 cursor-col-resize touch-none items-center justify-center md:flex"
+        >
+          <ResizeGrip vertical />
+        </div>
+      </aside>
+
+      {/* ═══════════════════ DRAWING WORKSPACE (right card) ═══════════════════ */}
+      <div className="flex min-w-0 flex-1 flex-col">
+      {/* ═══════════════════ PROJECT HEADER (top card) ═══════════════════ */}
+      <div ref={toolsRef} className="shrink-0 overflow-y-auto custom-scroll rounded-lg border border-line bg-surface" style={toolsH == null ? undefined : { height: toolsH }}>
+        <div className="space-y-4 p-4 sm:p-5">
+
+          {/* Title, live quantities and the 2D / 3D switch */}
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <input aria-label="Project title"
+                  type="text"
+                  value={projectTitle || 'CivisMetric Project'}
+                  onChange={(e) => setProjectTitle && setProjectTitle(e.target.value)}
+                  className="w-64 max-w-full truncate border-b border-transparent bg-transparent text-lg font-bold text-ink outline-none transition-all hover:border-line focus:border-primary"
+                />
+                <span className="rounded-full border border-line-control bg-primary/20 px-2.5 py-0.5 text-xs font-bold text-ink">BIM Level 2</span>
+              </div>
+              <dl className="mt-3 flex flex-wrap gap-x-7 gap-y-2">
+                {[
+                  ['Built-up', `${metrics.builtupM2} m²`],
+                  ['Carpet', `${metrics.carpetM2} m²`],
+                  ['Columns', metrics.cols],
+                  ['Footings', metrics.fdns],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-xs font-semibold uppercase tracking-wider text-ink">{label}</dt>
+                    <dd className="text-xl font-bold tabular-nums text-ink">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {viewMode === '3d' && (
+                <button
+                  onClick={() => setShowRoofIn3D(p => !p)}
+                  className={`h-10 whitespace-nowrap rounded-lg border px-3.5 text-sm font-semibold transition-all ${showRoofIn3D ? 'border-primary bg-primary/20 text-ink' : 'border-line bg-surface text-ink hover:bg-sunken'}`}
+                >
+                  {showRoofIn3D ? 'Roof: ON' : 'Open Top Cutaway'}
+                </button>
+              )}
+              {/* 2D / 3D Toggle */}
+              <div className="flex gap-1 rounded-xl border border-line bg-bg p-1">
+                {['2d', '3d'].map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setViewMode(m)}
+                    className={`h-8 whitespace-nowrap rounded-lg px-4 text-sm font-semibold transition-all ${viewMode === m ? 'bg-primary text-on-primary shadow-e1' : 'text-ink hover:bg-sunken'}`}
+                  >
+                    {m === '2d' ? '2D Plan' : '3D BIM'}
                   </button>
                 ))}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* 2D / 3D Toggle */}
-          <div className="flex bg-[#0b1120] rounded-lg border border-[#1e293b] p-0.5">
-            {['2d', '3d'].map(m => (
+          {/* Discipline filter and actions */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-line pt-4">
+            <div className="flex flex-wrap gap-1 rounded-xl border border-line bg-bg p-1">
+              {DISCIPLINES.map(d => (
+                <button
+                  key={d.id}
+                  onClick={() => setActiveDiscipline(d.id)}
+                  className={`h-8 whitespace-nowrap rounded-lg px-3.5 text-sm font-semibold transition-all ${
+                    activeDiscipline === d.id
+                      ? 'bg-primary text-on-primary shadow-e1'
+                      : 'text-ink hover:bg-sunken'
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {toastMsg && (
+                <span role="status" className="fixed bottom-14 left-1/2 z-[60] max-w-[90vw] -translate-x-1/2 truncate rounded-lg border border-line-control bg-[#0e1a1d] px-4 py-2 text-sm font-bold text-white shadow-e2">
+                  {toastMsg}
+                </span>
+              )}
+
+              {/* Templates Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowTemplates(p => !p)}
+                  className="flex h-10 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-sm font-semibold text-ink transition-all hover:bg-sunken"
+                >
+                  Templates <ChevronDownIcon />
+                </button>
+                {showTemplates && templatesList && (
+                  <div className="absolute left-0 z-50 mt-2 w-72 max-w-[calc(100vw-3rem)] space-y-1 rounded-lg border border-line bg-surface p-2 font-sans shadow-e2">
+                    {Object.entries(templatesList).map(([key, t]) => (
+                      <button
+                        key={key}
+                        onClick={() => { if (loadTemplate) loadTemplate(key); commitChange(t.elements, `Template loaded: ${t.name}`); setSelectedEl(null); setShowTemplates(false); showToast(`Loaded ${t.name}`); }}
+                        className={`w-full rounded-lg border p-2.5 text-left text-sm transition-all ${activeTemplate === key ? 'border-line-control bg-sunken' : 'border-transparent hover:bg-sunken'}`}
+                      >
+                        <p className="font-semibold text-ink">{t.name}</p>
+                        <p className="truncate text-xs text-ink">{t.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <button
-                key={m}
-                onClick={() => setViewMode(m)}
-                className={`px-3 py-1 rounded text-xs font-bold font-mono transition-all ${viewMode === m ? 'bg-primary text-on-primary ' : 'text-muted hover:text-ink'}`}
+                onClick={() => setShowSchedule(p => !p)}
+                className={`h-10 whitespace-nowrap rounded-lg border px-3.5 text-sm font-semibold transition-all ${showSchedule ? 'border-primary bg-primary/20 text-ink' : 'border-line bg-surface text-ink hover:bg-sunken'}`}
               >
-                {m === '2d' ? '2D PLAN' : '3D BIM'}
+                Schedule
               </button>
-            ))}
+
+              {/* Snap & Ortho Mode Toggles */}
+              <button
+                onClick={() => setSnapGrid(p => !p)}
+                aria-pressed={snapGrid}
+                className={`h-10 whitespace-nowrap rounded-lg border px-3.5 text-sm font-semibold transition-all ${snapGrid ? 'border-primary bg-primary/20 text-ink' : 'border-line bg-surface text-ink hover:bg-sunken'}`}
+              >
+                SNAP (F9)
+              </button>
+              <button
+                onClick={() => setOrthoMode(p => !p)}
+                aria-pressed={orthoMode}
+                className={`h-10 whitespace-nowrap rounded-lg border px-3.5 text-sm font-semibold transition-all ${orthoMode ? 'border-primary bg-primary/20 text-ink' : 'border-line bg-surface text-ink hover:bg-sunken'}`}
+              >
+                ORTHO (F8)
+              </button>
+
+              {/* Export to BOQ */}
+              <button
+                onClick={handlePushToMasterBOQ}
+                className="h-10 whitespace-nowrap rounded-lg bg-primary px-4 text-sm font-semibold text-on-primary shadow-e1 transition-all hover:bg-primary-hover"
+              >
+                Export to BOQ
+              </button>
+            </div>
           </div>
-
-          {viewMode === '3d' && (
-            <button
-              onClick={() => setShowRoofIn3D(p => !p)}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all ${showRoofIn3D ? 'bg-sunken border-primary text-primary' : 'border-line text-muted'}`}
-            >
-              {showRoofIn3D ? 'Roof: ON' : 'Open Top Cutaway'}
-            </button>
-          )}
-
-          {/* Export to BOQ */}
-          <button
-            onClick={handlePushToMasterBOQ}
-            className="px-3 py-1.5 bg-sunken hover:bg-primary text-ink hover:text-ink border border-line-control rounded-lg text-xs font-bold font-mono transition-all flex items-center gap-1.5"
-          >
-Export to BOQ
-          </button>
-
-          <button
-            onClick={() => setShowSchedule(p => !p)}
-            className={`p-1.5 rounded-lg border text-xs font-mono transition-all ${showSchedule ? 'bg-sunken text-primary border-primary' : 'border-line text-muted'}`}
-          >
-            Schedule
-          </button>
         </div>
       </div>
 
-      {/* ═══════════════════ CONSTRUCTION ELEMENT PALETTE ═══════════════════ */}
-      <div className="shrink-0 bg-[#0b1120] border-b border-[#1e293b] flex items-center gap-2 px-3 py-1.5 overflow-x-auto no-scrollbars">
-        
-        {/* Pointer / Selection Tool */}
-        <button
-          onClick={() => setActiveTool('select')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
-            activeTool === 'select'
-              ? 'bg-primary text-on-primary  scale-105'
-              : 'text-ink-2 hover:bg-sunken'
-          }`}
-        >
-Select / Move
-        </button>
-
-        {/* Category Tabs */}
-        <div className="flex items-center gap-1 pl-2 border-l border-line">
-          {COMPONENT_CATEGORIES.map(c => (
-            <button
-              key={c.cat}
-              onClick={() => setActiveDrawerCat(c.cat)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all ${
-                activeDrawerCat === c.cat
-                  ? 'bg-sunken text-primary font-bold border border-line'
-                  : 'text-muted hover:text-ink'
-              }`}
-            >
-              {c.title}
-            </button>
-          ))}
-        </div>
-
-        {/* Active Category Tools Drawer */}
-        <div className="flex items-center gap-1.5 pl-3 border-l border-line">
-          {COMPONENT_CATEGORIES.find(c => c.cat === activeDrawerCat)?.tools.map(tool => (
-            <button
-              key={tool.id}
-              onClick={() => setActiveTool(tool.id)}
-              title={`${tool.name} · ${tool.hint}`}
-              className={`px-2.5 py-1 rounded-lg text-xs font-mono flex items-center gap-1.5 border transition-all ${
-                activeTool === tool.id
-                  ? 'bg-primary text-on-primary font-bold border-primary '
-                  : 'bg-surface hover:bg-sunken text-ink-2 border-line'
-              }`}
-            >
-              <CadToolIcon id={tool.id} />
-              <span>{tool.name}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Selection Actions (Rotate & Delete) */}
-        {selectedEl && (
-          <div className="flex items-center gap-1.5 pl-3 ml-auto border-l border-line animate-fade-in">
-            <span className="text-xs text-accent font-mono font-bold">Selected: {selectedEl.category}</span>
-            <button
-              onClick={handleRotateSelected}
-              className="px-2 py-1 bg-sunken hover:bg-primary text-primary hover:text-on-primary rounded text-xs font-bold font-mono inline-flex items-center gap-1.5"
-            >
-              <RotateIcon /> 90°
-            </button>
-            <button
-              onClick={handleDeleteSelected}
-              className="px-2 py-1 bg-sunken hover:bg-primary text-error hover:text-ink rounded text-xs font-bold font-mono"
-            >
-              ✕ Del
-            </button>
-          </div>
-        )}
-
-        {/* Snap & Ortho Mode Toggles */}
-        <div className="flex items-center gap-1 pl-2 ml-auto border-l border-line">
-          <button
-            onClick={() => setSnapGrid(p => !p)}
-            className={`px-2 py-1 rounded text-xs font-mono font-bold border transition-all ${
-              snapGrid ? 'bg-sunken text-primary border-line-control' : 'text-muted border-line'
-            }`}
-          >
-            SNAP (F9)
-          </button>
-          <button
-            onClick={() => setOrthoMode(p => !p)}
-            className={`px-2 py-1 rounded text-xs font-mono font-bold border transition-all ${
-              orthoMode ? 'bg-sunken text-primary border-line-control' : 'text-muted border-line'
-            }`}
-          >
-            ORTHO (F8)
-          </button>
-        </div>
+      {/* Drag to resize: pull up for a bigger drawing area, down for more room above. Double-click resets. */}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize header and drawing area"
+        title="Drag to resize. Double-click to reset."
+        onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ } dragTools.current = { y: e.clientY, h: toolsRef.current ? toolsRef.current.offsetHeight : 0 }; }}
+        onPointerMove={(e) => { const d = dragTools.current; if (d) setToolsH(Math.max(0, Math.min(600, d.h + e.clientY - d.y))); }}
+        onPointerUp={() => { dragTools.current = null; }}
+        onPointerCancel={() => { dragTools.current = null; }}
+        onDoubleClick={() => setToolsH(null)}
+        className="group relative z-10 flex h-4 shrink-0 cursor-row-resize touch-none items-center justify-center"
+      >
+        <ResizeGrip />
       </div>
+
+      {/* ═══════════════════ DRAWING WORKSPACE (dark card) ═══════════════════ */}
+      <div style={CAD_DARK} className="dark flex min-h-[28rem] min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#1d3338] bg-[#0a1214] md:min-h-0">
 
       {/* ═══════════════════ MAIN VIEWPORT ═══════════════════ */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="flex flex-1 flex-col overflow-hidden relative md:flex-row">
+
 
         <div
           ref={containerRef}
-          className="flex-1 overflow-hidden relative bg-[#030508]"
-          style={{ cursor: activeTool === 'select' ? (isDraggingEl ? 'grabbing' : 'default') : 'crosshair' }}
+          className="flex-1 overflow-hidden relative bg-[#050b0c]"
+          style={{ cursor: isPanning || isDraggingEl ? 'grabbing' : activeTool === 'select' ? 'grab' : 'crosshair' }}
         >
+          {/* View controls: zoom, reset, and a hint for panning */}
+          {viewMode === '2d' && (
+            <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-xl border border-[#1d3338] bg-[#0e1a1d]/95 p-1 shadow-e2" onMouseDown={(e) => e.stopPropagation()}>
+              <button type="button" aria-label="Zoom out" onClick={() => zoomBy(0.8)} className="grid h-8 w-8 place-items-center rounded-lg text-lg font-semibold text-ink hover:bg-sunken">&minus;</button>
+              <span className="min-w-[3.25rem] text-center text-[13px] font-semibold tabular-nums text-ink">{Math.round((zoom / 1.1) * 100)}%</span>
+              <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.25)} className="grid h-8 w-8 place-items-center rounded-lg text-lg font-semibold text-ink hover:bg-sunken">+</button>
+              <button type="button" onClick={resetView} className="ml-1 h-8 rounded-lg px-2.5 text-[13px] font-semibold text-primary hover:bg-sunken">Reset view</button>
+            </div>
+          )}
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10 hidden text-xs text-ink sm:block">Drag empty space or hold Space to pan · scroll to zoom</div>
+
           {/* Dynamic Distance & Angle Tooltip */}
           {isDrawing && drawStart && (
-            <div className="absolute top-3 left-3 z-20 bg-surface border border-primary text-primary px-3 py-1.5 rounded-lg text-xs font-mono pointer-events-none">
+            <div className="absolute top-3 left-3 z-20 bg-surface border border-primary text-primary px-3 py-1.5 rounded-lg text-[13px] font-medium pointer-events-none">
               Length: <strong>{pxToM(dist(drawStart, cursor))}m</strong> · Angle: <strong>{angleDeg(drawStart, cursor).toFixed(1)}°</strong>
             </div>
           )}
@@ -1045,11 +1212,11 @@ Select / Move
             >
               <defs>
                 <pattern id="cadGridCleanTitanium" width={gridSize * zoom} height={gridSize * zoom} patternUnits="userSpaceOnUse" x={pan.x % (gridSize * zoom)} y={pan.y % (gridSize * zoom)}>
-                  <path d={`M ${gridSize * zoom} 0 L 0 0 0 ${gridSize * zoom}`} fill="none" stroke="#0f172a" strokeWidth="0.8" />
+                  <path d={`M ${gridSize * zoom} 0 L 0 0 0 ${gridSize * zoom}`} fill="none" stroke="#13262a" strokeWidth="0.8" />
                 </pattern>
                 <pattern id="cadGridBigTitanium" width={gridSize * zoom * 5} height={gridSize * zoom * 5} patternUnits="userSpaceOnUse" x={pan.x % (gridSize * zoom * 5)} y={pan.y % (gridSize * zoom * 5)}>
                   <rect width={gridSize * zoom * 5} height={gridSize * zoom * 5} fill="url(#cadGridCleanTitanium)" />
-                  <path d={`M ${gridSize * zoom * 5} 0 L 0 0 0 ${gridSize * zoom * 5}`} fill="none" stroke="#1e293b" strokeWidth="1.2" opacity="0.6" />
+                  <path d={`M ${gridSize * zoom * 5} 0 L 0 0 0 ${gridSize * zoom * 5}`} fill="none" stroke="#1d3338" strokeWidth="1.2" opacity="0.6" />
                 </pattern>
               </defs>
 
@@ -1068,7 +1235,7 @@ Select / Move
                       x={f.x} y={f.y} width={f.w} height={f.h}
                       fill="#eab30818" stroke="#eab308" strokeWidth={1.5 / zoom}
                     />
-                    <text x={f.x + f.w / 2} y={f.y + f.h / 2} fill="#eab308" fontSize={8 / zoom} fontFamily="monospace" textAnchor="middle" dominantBaseline="middle">{f.label}</text>
+                    <text x={f.x + f.w / 2} y={f.y + f.h / 2} fill="#eab308" fontSize={8 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle" dominantBaseline="middle">{f.label}</text>
                   </g>
                 ))}
 
@@ -1100,7 +1267,7 @@ Select / Move
                       fill={`${r.color || '#0284c7'}15`} stroke={r.color || '#0284c7'} strokeWidth={0.8 / zoom} rx={2}
                     />
                     <text x={r.x + r.w / 2} y={r.y + r.h / 2 - 5} fill="#f8fafc" fontSize={9 / zoom} fontWeight="bold" textAnchor="middle">{r.name}</text>
-                    <text x={r.x + r.w / 2} y={r.y + r.h / 2 + 8} fill="#38bdf8" fontSize={8 / zoom} fontFamily="monospace" textAnchor="middle">{r.area} ({r.floor})</text>
+                    <text x={r.x + r.w / 2} y={r.y + r.h / 2 + 8} fill="#38bdf8" fontSize={8 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle">{r.area} ({r.floor})</text>
                   </g>
                 ))}
 
@@ -1111,7 +1278,7 @@ Select / Move
                       x={m.x} y={m.y} width={m.w} height={m.h}
                       fill="#06b6d425" stroke="#06b6d4" strokeWidth={1.5 / zoom} rx={2}
                     />
-                    <text x={m.x + m.w / 2} y={m.y + m.h / 2} fill="#22d3ee" fontSize={7 / zoom} fontFamily="monospace" textAnchor="middle" dominantBaseline="middle">{m.label}</text>
+                    <text x={m.x + m.w / 2} y={m.y + m.h / 2} fill="#22d3ee" fontSize={7 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle" dominantBaseline="middle">{m.label}</text>
                   </g>
                 ))}
 
@@ -1122,7 +1289,7 @@ Select / Move
                     {Array.from({ length: 7 }).map((_, i) => (
                       <line key={i} x1={st.x} y1={st.y + (i * st.h) / 7} x2={st.x + st.w} y2={st.y + (i * st.h) / 7} stroke="#94a3b8" strokeWidth={0.6 / zoom} />
                     ))}
-                    <text x={st.x + st.w / 2} y={st.y + st.h / 2} fill="#e2e8f0" fontSize={7 / zoom} fontFamily="monospace" textAnchor="middle">UP</text>
+                    <text x={st.x + st.w / 2} y={st.y + st.h / 2} fill="#e2e8f0" fontSize={7 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle">UP</text>
                   </g>
                 ))}
 
@@ -1137,7 +1304,7 @@ Select / Move
                       x={f.x} y={f.y} width={f.w} height={f.h}
                       fill="#ec489922" stroke={selectedEl?.id === f.id ? '#f43f5e' : '#ec4899'} strokeWidth={1 / zoom} rx={2}
                     />
-                    <text x={f.x + f.w / 2} y={f.y + f.h / 2} fill="#f472b6" fontSize={6.5 / zoom} fontFamily="monospace" textAnchor="middle" dominantBaseline="middle">{f.label}</text>
+                    <text x={f.x + f.w / 2} y={f.y + f.h / 2} fill="#f472b6" fontSize={6.5 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle" dominantBaseline="middle">{f.label}</text>
                   </g>
                 ))}
 
@@ -1157,7 +1324,7 @@ Select / Move
                         strokeWidth={wt / zoom}
                         strokeLinecap="square"
                       />
-                      <text x={mx} y={my - 6 / zoom} fill="#94a3b8" fontSize={7 / zoom} fontFamily="monospace" textAnchor="middle">{pxToM(lenPx)}m</text>
+                      <text x={mx} y={my - 6 / zoom} fill="#94a3b8" fontSize={7 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle">{pxToM(lenPx)}m</text>
 
                       {/* Grip Points */}
                       {isSelected && (
@@ -1187,7 +1354,7 @@ Select / Move
                     />
                     <line x1={col.x} y1={col.y} x2={col.x + col.w} y2={col.y + col.h} stroke="#818cf8" strokeWidth={0.6 / zoom} />
                     <line x1={col.x + col.w} y1={col.y} x2={col.x} y2={col.y + col.h} stroke="#818cf8" strokeWidth={0.6 / zoom} />
-                    <text x={col.x + col.w / 2} y={col.y - 3 / zoom} fill="#a5b4fc" fontSize={6.5 / zoom} fontFamily="monospace" textAnchor="middle">{col.label}</text>
+                    <text x={col.x + col.w / 2} y={col.y - 3 / zoom} fill="#a5b4fc" fontSize={6.5 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle">{col.label}</text>
                   </g>
                 ))}
 
@@ -1203,7 +1370,7 @@ Select / Move
                 {shouldRender('windows') && windowsList.map(w => (
                   <g key={w.id} onMouseDown={(e) => handleElementMouseDown(e, 'windows', w)}>
                     <rect x={w.x} y={w.y} width={w.w} height={8 / zoom} fill="#064e3b" stroke="#34d399" strokeWidth={1.2 / zoom} />
-                    <text x={w.x + w.w / 2} y={w.y - 4 / zoom} fill="#34d399" fontSize={6 / zoom} fontFamily="monospace" textAnchor="middle">{w.label}</text>
+                    <text x={w.x + w.w / 2} y={w.y - 4 / zoom} fill="#34d399" fontSize={6 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle">{w.label}</text>
                   </g>
                 ))}
 
@@ -1213,7 +1380,7 @@ Select / Move
                     <line x1={d.x1} y1={d.y1} x2={d.x2} y2={d.y2} stroke="#e2e8f0" strokeWidth={0.8 / zoom} />
                     <line x1={d.x1} y1={d.y1 - 8 / zoom} x2={d.x1} y2={d.y1 + 8 / zoom} stroke="#e2e8f0" strokeWidth={0.8 / zoom} />
                     <line x1={d.x2} y1={d.y2 - 8 / zoom} x2={d.x2} y2={d.y2 + 8 / zoom} stroke="#e2e8f0" strokeWidth={0.8 / zoom} />
-                    <text x={(d.x1 + d.x2) / 2} y={d.y1 - 10 / zoom} fill="#f8fafc" fontSize={7.5 / zoom} fontFamily="monospace" textAnchor="middle">{d.text}</text>
+                    <text x={(d.x1 + d.x2) / 2} y={d.y1 - 10 / zoom} fill="#f8fafc" fontSize={7.5 / zoom} fontFamily="Inter, system-ui, sans-serif" textAnchor="middle">{d.text}</text>
                   </g>
                 ))}
 
@@ -1228,16 +1395,30 @@ Select / Move
               </g>
             </svg>
           ) : (
-            <div ref={mountRef} className="w-full h-full bg-[#080c16]" />
+            <div ref={mountRef} className="w-full h-full bg-[#0a1214]" />
           )}
         </div>
 
         {/* ═══════════════════ ARCHITECTURAL SCHEDULE SLIDEOUT ═══════════════════ */}
         {showSchedule && (
-          <div className="w-80 bg-[#0b1120] border-l border-[#1e293b] flex flex-col shrink-0 text-xs overflow-y-auto p-4 space-y-4 animate-fade-in">
+          <div style={{ width: scheduleW }} className="relative max-w-[85%] bg-[#0e1a1d] border-l border-[#1d3338] flex flex-col shrink-0 text-xs overflow-y-auto p-4 space-y-4">
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize schedule panel"
+              title="Drag to resize. Double-click to reset."
+              onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ } dragSchedule.current = { x: e.clientX, w: scheduleW }; }}
+              onPointerMove={(e) => { const d = dragSchedule.current; if (d) setScheduleW(Math.max(240, Math.min(720, d.w + d.x - e.clientX))); }}
+              onPointerUp={() => { dragSchedule.current = null; }}
+              onPointerCancel={() => { dragSchedule.current = null; }}
+              onDoubleClick={() => setScheduleW(320)}
+              className="group absolute inset-y-0 left-0 z-10 flex w-4 cursor-col-resize touch-none items-center justify-center"
+            >
+              <ResizeGrip vertical />
+            </div>
             <div className="flex items-center justify-between border-b border-line pb-2">
-              <h3 className="font-bold text-ink font-mono">Building Schedule</h3>
-              <button onClick={() => setShowSchedule(false)} className="text-muted hover:text-ink">✕</button>
+              <h3 className="font-bold text-ink font-sans">Building Schedule</h3>
+              <button onClick={() => setShowSchedule(false)} className="rounded-lg px-2 py-1 text-[13px] font-semibold text-ink hover:bg-sunken">Close</button>
             </div>
 
             <div className="bg-surface rounded-lg border border-line p-3 space-y-2 text-xs">
@@ -1251,7 +1432,7 @@ Select / Move
 
             <button
               onClick={handlePushToMasterBOQ}
-              className="w-full py-2.5 bg-primary text-on-primary rounded-lg font-bold font-mono text-xs hover:bg-sunken transition-all"
+              className="w-full py-2.5 bg-primary text-on-primary rounded-lg font-semibold text-xs hover:bg-sunken transition-all"
             >
               Export Takeoff to Master BOQ
             </button>
@@ -1260,21 +1441,36 @@ Select / Move
       </div>
 
       {/* ═══════════════════ FOOTER STATUS BAR ═══════════════════ */}
-      <div className="shrink-0 bg-[#080c16] border-t border-[#1e293b] px-3 py-1 flex items-center justify-between text-xs font-mono text-muted">
-        <div className="flex items-center gap-3">
-          <span className="text-primary font-bold">{activeTool}</span>
-          <span>X: <strong className="text-ink">{pxToM(cursor.x)}m</strong></span>
-          <span>Y: <strong className="text-ink">{pxToM(cursor.y)}m</strong></span>
-          <span className={orthoMode ? 'text-primary font-bold' : ''}>ORTHO: {orthoMode ? 'ON' : 'OFF'}</span>
-          <span className={snapGrid ? 'text-primary font-bold' : ''}>SNAP: {snapGrid ? 'ON' : 'OFF'}</span>
+      <div className="shrink-0 bg-[#0a1214] border-t border-[#1d3338] px-3 py-1.5 flex items-center gap-4 text-[13px] font-medium text-muted whitespace-nowrap">
+        <div className="flex shrink-0 items-center gap-4">
+          <span className="text-primary font-bold uppercase">{activeTool}</span>
+          <span>X <strong className="text-ink tabular-nums">{pxToM(cursor.x)} m</strong></span>
+          <span>Y <strong className="text-ink tabular-nums">{pxToM(cursor.y)} m</strong></span>
+          <span className={orthoMode ? 'text-primary font-bold' : ''}>ORTHO {orthoMode ? 'ON' : 'OFF'}</span>
+          <span className={snapGrid ? 'text-primary font-bold' : ''}>SNAP {snapGrid ? 'ON' : 'OFF'}</span>
         </div>
-        <div className="hidden sm:flex items-center gap-4 text-muted">
-          <span>{cmdLog[cmdLog.length - 1]}</span>
-          <span className="text-ink-2">|</span>
-          <span className="text-muted">Scale 1:50 · 20px=1.0m</span>
-        </div>
+        <span className="hidden min-w-0 flex-1 truncate border-l border-[#1d3338] pl-4 sm:block" title={cmdLog[cmdLog.length - 1]}>{cmdLog[cmdLog.length - 1]}</span>
+        <span className="ml-auto hidden shrink-0 text-ink-2 sm:block">Scale 1:50 · 20 px = 1.0 m</span>
       </div>
 
+      {/* Drag down to make the whole drawing workspace taller (the page scrolls). Double-click resets. */}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize workspace height"
+        title="Drag to make the workspace taller or shorter. Double-click to reset."
+        onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ } dragStudio.current = { y: e.clientY, h: studioRef.current ? studioRef.current.offsetHeight : 0 }; }}
+        onPointerMove={(e) => { const d = dragStudio.current; if (d) setStudioH(Math.max(320, Math.min(3000, d.h + e.clientY - d.y))); }}
+        onPointerUp={() => { dragStudio.current = null; }}
+        onPointerCancel={() => { dragStudio.current = null; }}
+        onDoubleClick={() => setStudioH(null)}
+        className="group flex h-4 shrink-0 cursor-row-resize touch-none items-center justify-center border-t border-[#1d3338] bg-[#0e1a1d]"
+      >
+        <ResizeGrip />
+      </div>
+
+      </div>
+      </div>
     </div>
   );
 }
