@@ -29,13 +29,15 @@ const Chevron = ({ open }) => (
 
 function MenuPopover({ items, onPick }) {
   return (
-    <ul role="menu" className="page-enter absolute left-1/2 top-full z-10 mt-3 min-w-[15rem] -translate-x-1/2 rounded-xl border border-white/15 bg-nav py-1.5 shadow-[0_16px_40px_rgb(0_0_0/0.4)]">
-      {items.map((it) => (
-        <li key={it.label} role="none">
-          <button type="button" role="menuitem" onClick={() => onPick(it)} className="w-full px-4 py-2 text-left text-sm text-white hover:bg-white/10">{it.label}</button>
-        </li>
-      ))}
-    </ul>
+    <div className="absolute left-1/2 top-full z-10 -translate-x-1/2 pt-3">
+      <ul role="menu" className="page-enter min-w-[15rem] rounded-xl border border-white/15 bg-nav py-1.5 shadow-[0_16px_40px_rgb(0_0_0/0.4)]">
+        {items.map((it) => (
+          <li key={it.label} role="none">
+            <button type="button" role="menuitem" onClick={() => onPick(it)} className="w-full px-4 py-2 text-left text-sm text-white hover:bg-white/10">{it.label}</button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -51,6 +53,9 @@ export default function NotchNav({ items, mobileItems, activeId, logo, logoMark,
   const wrapRef = useRef(null);
   const [openId, setOpenId] = useState(null);
   const [drawer, setDrawer] = useState(false);
+  const closeTimer = useRef(0);
+  const openMenu = (id) => { clearTimeout(closeTimer.current); setOpenId(id); };
+  const closeMenuSoon = () => { clearTimeout(closeTimer.current); closeTimer.current = setTimeout(() => setOpenId(null), 160); };
 
   // Slide the pill under the active tab.
   useEffect(() => {
@@ -81,7 +86,7 @@ export default function NotchNav({ items, mobileItems, activeId, logo, logoMark,
     return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
   }, [openId, drawer]);
 
-  const pick = (it) => { setOpenId(null); setDrawer(false); it.onSelect(); };
+  const pick = (it) => { clearTimeout(closeTimer.current); setOpenId(null); setDrawer(false); it.onSelect(); };
   const activeLabel = items.find((i) => i.id === activeId)?.label || 'Menu';
 
   return (
@@ -101,14 +106,14 @@ export default function NotchNav({ items, mobileItems, activeId, logo, logoMark,
           {items.map((it) => {
             const active = it.id === activeId;
             return (
-              <div key={it.id} className="relative" onMouseEnter={() => it.menu && setOpenId(it.id)} onMouseLeave={() => it.menu && setOpenId(null)}>
+              <div key={it.id} className="relative" onMouseEnter={() => it.menu && openMenu(it.id)} onMouseLeave={() => it.menu && closeMenuSoon()}>
                 <button
                   ref={(el) => { tabRefs.current[it.id] = el; }}
                   type="button"
                   aria-current={active ? 'true' : undefined}
                   aria-haspopup={it.menu ? 'true' : undefined}
                   aria-expanded={it.menu ? openId === it.id : undefined}
-                  onClick={() => (it.menu ? setOpenId(it.id) : it.onSelect())}
+                  onClick={() => (it.menu ? openMenu(it.id) : it.onSelect())}
                   className={`relative z-10 flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm transition-colors hover:bg-white/10 ${active ? 'font-semibold' : 'font-medium'}`}
                 >
                   {it.label}
