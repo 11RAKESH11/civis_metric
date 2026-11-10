@@ -70,8 +70,8 @@ export function CadVisual() {
         <div className="absolute left-2 top-2 flex flex-col gap-1">
           {['pen', 'ruler', 'area', 'cube'].map((i) => <span key={i} className="grid place-items-center w-7 h-7 rounded bg-white/10 border border-white/20"><ToolIcon id={i} className="w-4 h-4" /></span>)}
         </div>
-        <span className="absolute right-3 bottom-2 text-xs font-mono">Snap 0.5 m · Area 41.25 m² · 3D extrude</span>
       </div>
+      <p className="px-3 pb-2.5 pt-1 text-right text-xs font-mono">Snap 0.5 m · Area 41.25 m² · 3D extrude</p>
     </Window>
   );
 }
@@ -159,15 +159,15 @@ export function MaterialsVisual() {
 export function ReportVisual() {
   return (
     <div className="rounded-lg bg-white text-black shadow-[0_24px_60px_rgb(0_0_0/0.35)] p-6 sm:p-8 text-sm" role="img" aria-label="Sample estimate report with project information, itemised quantities, rates, GST and total">
-      <div className="flex justify-between items-start gap-4 border-b-2 border-nav pb-3">
+      <div className="flex flex-col gap-1 border-b-2 border-nav pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div><p className="text-xs font-bold tracking-widest uppercase">Estimate report</p><p className="text-lg font-semibold">Sample project · RCC slab</p></div>
-        <p className="text-xs text-right">Sample data<br />Concrete M20</p>
+        <p className="text-xs sm:text-right">Sample data<br />Concrete M20</p>
       </div>
       <table className="w-full mt-3">
-        <thead><tr className="text-left text-xs uppercase tracking-wide border-b border-[#DEDBD5]"><th className="py-1.5">Item</th><th className="py-1.5 text-right">Qty</th><th className="py-1.5 text-right hidden sm:table-cell">Rate</th><th className="py-1.5 text-right">Amount ₹</th></tr></thead>
+        <thead><tr className="text-left text-xs uppercase tracking-wide border-b border-[#DEDBD5]"><th className="py-1.5">Item</th><th className="py-1.5 text-right">Qty</th><th className="py-1.5 text-right hidden sm:table-cell">Rate</th><th className="py-1.5 pl-3 text-right">Amount ₹</th></tr></thead>
         <tbody>
           {ROWS.map((r) => (
-            <tr key={r.item} className="border-b border-[#EEECE8]"><td className="py-1.5">{r.item}</td><td className="py-1.5 text-right tabular-nums">{r.unit === 'bags' ? r.qty : f2(r.qty)} {r.unit}</td><td className="py-1.5 text-right tabular-nums hidden sm:table-cell">{f0(r.rate)}</td><td className="py-1.5 text-right tabular-nums">{f0(r.amount)}</td></tr>
+            <tr key={r.item} className="border-b border-[#EEECE8]"><td className="py-1.5">{r.item}</td><td className="py-1.5 text-right tabular-nums">{r.unit === 'bags' ? r.qty : f2(r.qty)} {r.unit}</td><td className="py-1.5 text-right tabular-nums hidden sm:table-cell">{f0(r.rate)}</td><td className="py-1.5 pl-3 text-right tabular-nums">{f0(r.amount)}</td></tr>
           ))}
         </tbody>
       </table>

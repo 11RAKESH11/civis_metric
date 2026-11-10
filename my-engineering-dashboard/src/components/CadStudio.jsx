@@ -919,7 +919,7 @@ export default function CadStudio() {
           onPointerUp={() => { dragSide.current = null; }}
           onPointerCancel={() => { dragSide.current = null; }}
           onDoubleClick={() => { setStudioW(null); setStudioML(0); }}
-          className={`group absolute inset-y-0 z-30 flex w-4 cursor-col-resize touch-none items-center justify-center ${side === 'left' ? 'left-0' : 'right-0'}`}
+          className={`group absolute inset-y-0 z-30 hidden w-4 md:flex cursor-col-resize touch-none items-center justify-center ${side === 'left' ? 'left-0' : 'right-0'}`}
         >
           <ResizeGrip vertical />
         </div>
@@ -1441,7 +1441,7 @@ export default function CadStudio() {
       </div>
 
       {/* ═══════════════════ FOOTER STATUS BAR ═══════════════════ */}
-      <div className="shrink-0 bg-[#0a1214] border-t border-[#1d3338] px-3 py-1.5 flex items-center gap-4 text-[13px] font-medium text-muted whitespace-nowrap">
+      <div className="shrink-0 bg-[#0a1214] border-t border-[#1d3338] px-3 py-1.5 flex items-center gap-4 overflow-x-auto custom-scroll text-[13px] font-medium text-muted whitespace-nowrap">
         <div className="flex shrink-0 items-center gap-4">
           <span className="text-primary font-bold uppercase">{activeTool}</span>
           <span>X <strong className="text-ink tabular-nums">{pxToM(cursor.x)} m</strong></span>

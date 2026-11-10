@@ -97,8 +97,8 @@ export default function EstimatorIndex({ onNavigate }) {
     <div className="page-enter max-w-5xl">
       {/* Banner: intro and search on the left, the building drawing and stripes on the right */}
       <div className="relative overflow-hidden rounded-lg border border-line bg-surface md:min-h-[300px]">
-        <span aria-hidden="true" className="md:hidden absolute -right-6 top-0 h-full w-14 bg-stripe -skew-x-[24deg]" />
-        <span aria-hidden="true" className="md:hidden absolute right-10 top-0 h-full w-3 bg-stripe/50 -skew-x-[24deg]" />
+        <span aria-hidden="true" className="md:hidden absolute -right-5 top-0 h-full w-10 bg-stripe -skew-x-[24deg]" />
+        <span aria-hidden="true" className="md:hidden absolute right-7 top-0 h-full w-2 bg-stripe/50 -skew-x-[24deg]" />
         {/* Decorative photo-style render; light theme multiplies away its white, dark theme inverts it onto the banner */}
         <img
           src="/house.webp"
@@ -108,7 +108,7 @@ export default function EstimatorIndex({ onNavigate }) {
           height="556"
           className="hidden md:block absolute right-0 bottom-0 h-full w-auto max-w-[62%] object-cover object-left pointer-events-none select-none mix-blend-multiply dark:mix-blend-screen dark:invert dark:hue-rotate-180 [mask-image:linear-gradient(to_right,transparent,black_22%)]"
         />
-        <div className="relative z-10 p-6 sm:p-8 md:max-w-[52%]">
+        <div className="relative z-10 p-6 pr-12 sm:p-8 sm:pr-14 md:max-w-[52%] md:pr-8">
           <div aria-hidden="true" className="flex items-center gap-1.5 mb-4">
             <span className="block w-10 h-1.5 bg-stripe -skew-x-[35deg]" />
             <span className="block w-5 h-1.5 bg-stripe/60 -skew-x-[35deg]" />

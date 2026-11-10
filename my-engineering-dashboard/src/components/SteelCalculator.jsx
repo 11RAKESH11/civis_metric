@@ -275,7 +275,7 @@ export default function SteelCalculator() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex bg-sunken dark:bg-sunken p-1 rounded-lg">
             {['normal', 'advanced', 'boq'].map(t => (
               <button key={t} onClick={() => setMode(t)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${mode === t ? 'bg-primary text-on-primary ' : 'text-muted dark:text-muted'}`}>{t}</button>

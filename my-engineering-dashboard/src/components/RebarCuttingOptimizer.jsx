@@ -385,7 +385,7 @@ Add Bar Schedule Item
               </div>
 
               {/* Diameter Switcher Pills */}
-              <div className="flex gap-1 overflow-x-auto no-scrollbars">
+              <div className="flex max-w-full gap-1 overflow-x-auto no-scrollbars">
                 {[8, 10, 12, 16, 20, 25, 32].map(dia => (
                   <button
                     key={dia}

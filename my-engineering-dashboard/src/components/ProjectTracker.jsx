@@ -205,7 +205,7 @@ export default function ProjectTracker() {
         </div>
 
         {/* Phase Summary Pill Switcher */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mt-6 pt-5 border-t border-line">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5 mt-6 pt-5 border-t border-line">
           {phases.map(phase => {
             const phaseMilestones = phase.milestones;
             const phaseProgress = Math.round(
@@ -225,14 +225,14 @@ export default function ProjectTracker() {
               >
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-base">{phase.icon}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold text-ink ${
+                  <span className={`whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-bold text-ink ${
                     phase.status === 'Completed' ? 'bg-success/25' :
                     phase.status === 'In Progress' ? 'bg-primary/30' : 'bg-sunken border border-line'
                   }`}>
                     {phase.status}
                   </span>
                 </div>
-                <h4 className="mt-2 text-sm font-bold leading-snug text-ink">{phase.name.split(':')[1] || phase.name}</h4>
+                <h4 className="mt-2 break-words text-sm font-bold leading-snug text-ink">{phase.name.split(':')[1] || phase.name}</h4>
                 <div className="w-full h-2 bg-line/60 rounded-full mt-3 overflow-hidden">
                   <div style={{ width: `${phaseProgress}%` }} className="h-full rounded-full bg-primary transition-[width] duration-500"></div>
                 </div>

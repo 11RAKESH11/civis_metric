@@ -282,7 +282,7 @@ export default function SlabCalculator() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {results && (
             <button
               onClick={() => addToCad({ type: 'slab', source: 'Slab Calculator', label: `${slabTypes.find(s=>s.id===inputs.slabTypeId)?.name || 'Slab'}`, length: results.slabAreaSqm ? Math.sqrt(results.slabAreaSqm) : 5, width: results.slabAreaSqm ? Math.sqrt(results.slabAreaSqm) : 4, thickness: inputs.thickness * (unitSystem === 'ft' ? 0.0254 : 0.01) })}
