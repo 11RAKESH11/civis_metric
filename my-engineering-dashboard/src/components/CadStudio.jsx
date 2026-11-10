@@ -188,6 +188,41 @@ export default function CadStudio() {
   const [studioW, setStudioW] = useState(null);
   const [studioML, setStudioML] = useState(0);
   const dragSide = useRef(null);
+  const dragCorner = useRef(null);
+  // Largest sizes a drag can reach. The page scrolls to follow the pointer, so the workspace can grow past the visible area.
+  const fitMax = () => ({ w: 4000, h: 4000 });
+  // While a resize drag is held near the right or bottom edge of the window, the page scrolls and the size keeps growing, so you never have to scroll by hand.
+  const autoRef = useRef(null);
+  const stopAuto = () => { if (autoRef.current) cancelAnimationFrame(autoRef.current.raf); autoRef.current = null; };
+  const trackAuto = (x, y, apply) => {
+    let a = autoRef.current;
+    if (!a) {
+      const sc = (studioRef.current && studioRef.current.closest('.custom-scroll')) || document.scrollingElement;
+      a = { x, y, extraX: 0, extraY: 0, l0: sc.scrollLeft, t0: sc.scrollTop, sc, apply, raf: 0 };
+      autoRef.current = a;
+      const tick = () => {
+        const c = autoRef.current;
+        if (!c) return;
+        const edge = 56;
+        let dx = 0;
+        let dy = 0;
+        if (c.y > window.innerHeight - edge) dy = Math.min(22, (c.y - (window.innerHeight - edge)) / 2);
+        if (c.x > window.innerWidth - edge) dx = Math.min(22, (c.x - (window.innerWidth - edge)) / 2);
+        if (dx || dy) {
+          c.extraX += dx;
+          c.extraY += dy;
+          c.apply();
+          c.sc.scrollLeft = c.l0 + c.extraX;
+          c.sc.scrollTop = c.t0 + c.extraY;
+        }
+        c.raf = requestAnimationFrame(tick);
+      };
+      a.raf = requestAnimationFrame(tick);
+    }
+    a.x = x;
+    a.y = y;
+    a.apply = apply;
+  };
   // Width of the Building Schedule side panel, resized by dragging its left edge.
   const [scheduleW, setScheduleW] = useState(320);
   const dragSchedule = useRef(null);
@@ -908,22 +943,52 @@ export default function CadStudio() {
             if (!d) return;
             const dx = e.clientX - d.x;
             if (d.side === 'right') {
-              setStudioW(Math.max(480, Math.min(2600, d.w + dx)));
+              trackAuto(e.clientX, e.clientY, () => { const a = autoRef.current; setStudioW(Math.max(480, Math.min(fitMax().w - studioML, d.w + (a.x - d.x) + a.extraX))); });
+              autoRef.current.apply();
             } else {
               // Left edge: moving it right narrows the workspace; moving it back left (never past the page edge) widens it again.
               const ml = Math.max(0, d.ml + dx);
               setStudioML(ml);
-              setStudioW(Math.max(480, Math.min(2600, d.w - (ml - d.ml))));
+              setStudioW(Math.max(480, Math.min(fitMax().w - ml, d.w - (ml - d.ml))));
             }
           }}
-          onPointerUp={() => { dragSide.current = null; }}
-          onPointerCancel={() => { dragSide.current = null; }}
+          onPointerUp={() => { dragSide.current = null; stopAuto(); }}
+          onPointerCancel={() => { dragSide.current = null; stopAuto(); }}
           onDoubleClick={() => { setStudioW(null); setStudioML(0); }}
           className={`group absolute inset-y-0 z-30 hidden w-4 md:flex cursor-col-resize touch-none items-center justify-center ${side === 'left' ? 'left-0' : 'right-0'}`}
         >
           <ResizeGrip vertical />
         </div>
       ))}
+
+      {/* Bottom-right corner: drag diagonally to change width and height together. Double-click resets both. */}
+      <div
+        role="separator"
+        aria-label="Resize workspace width and height"
+        title="Drag diagonally to resize. Double-click to reset."
+        onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ } const el = studioRef.current; dragCorner.current = { x: e.clientX, y: e.clientY, w: el ? el.offsetWidth : 0, h: el ? el.offsetHeight : 0 }; }}
+        onPointerMove={(e) => {
+          const d = dragCorner.current;
+          if (!d) return;
+          trackAuto(e.clientX, e.clientY, () => {
+            const t = autoRef.current;
+            const max = fitMax();
+            setStudioW(Math.max(480, Math.min(max.w - studioML, d.w + (t.x - d.x) + t.extraX)));
+            setStudioH(Math.max(320, Math.min(max.h, d.h + (t.y - d.y) + t.extraY)));
+          });
+          autoRef.current.apply();
+        }}
+        onPointerUp={() => { dragCorner.current = null; stopAuto(); }}
+        onPointerCancel={() => { dragCorner.current = null; stopAuto(); }}
+        onDoubleClick={() => { setStudioW(null); setStudioML(0); setStudioH(null); }}
+        className="group absolute -bottom-1.5 -right-1.5 z-40 hidden h-8 w-8 cursor-nwse-resize touch-none items-center justify-center md:flex"
+      >
+        <span aria-hidden="true" className="pointer-events-none grid h-6 w-6 place-items-center rounded-full border border-[#2a4a50] bg-[#10222a] shadow-e1 transition-all group-hover:border-primary group-hover:bg-[#12303a] group-hover:shadow-[0_0_10px_rgb(var(--c-primary)/0.6)] group-active:scale-110 group-active:border-primary">
+          <svg viewBox="0 0 12 12" className="h-3 w-3 text-[#8fb5ba] transition-colors group-hover:text-primary group-active:text-primary" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <path d="M10.5 3.5l-7 7M10.5 7l-3.5 3.5" />
+          </svg>
+        </span>
+      </div>
 
       {/* ═══════════════════ ELEMENT LIBRARY (left card) ═══════════════════ */}
       <aside className="relative z-10 flex max-h-72 w-full shrink-0 flex-col gap-4 rounded-lg border border-line bg-surface p-5 md:max-h-none md:w-[var(--rail-w)]" aria-label="Element library">
@@ -1460,9 +1525,9 @@ export default function CadStudio() {
         aria-label="Resize workspace height"
         title="Drag to make the workspace taller or shorter. Double-click to reset."
         onPointerDown={(e) => { try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ } dragStudio.current = { y: e.clientY, h: studioRef.current ? studioRef.current.offsetHeight : 0 }; }}
-        onPointerMove={(e) => { const d = dragStudio.current; if (d) setStudioH(Math.max(320, Math.min(3000, d.h + e.clientY - d.y))); }}
-        onPointerUp={() => { dragStudio.current = null; }}
-        onPointerCancel={() => { dragStudio.current = null; }}
+        onPointerMove={(e) => { const d = dragStudio.current; if (!d) return; trackAuto(e.clientX, e.clientY, () => { const a = autoRef.current; setStudioH(Math.max(320, Math.min(fitMax().h, d.h + (a.y - d.y) + a.extraY))); }); autoRef.current.apply(); }}
+        onPointerUp={() => { dragStudio.current = null; stopAuto(); }}
+        onPointerCancel={() => { dragStudio.current = null; stopAuto(); }}
         onDoubleClick={() => setStudioH(null)}
         className="group flex h-4 shrink-0 cursor-row-resize touch-none items-center justify-center border-t border-[#1d3338] bg-[#0e1a1d]"
       >
