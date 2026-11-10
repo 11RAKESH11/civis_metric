@@ -133,16 +133,16 @@ export default function NotchNav({ items, mobileItems, activeId, logo, logoMark,
       </aside>
 
       {/* Below lg: one island with a dropdown */}
-      <div className="lg:hidden absolute left-1/2 top-0 z-50 -translate-x-1/2 rounded-b-[24px] bg-nav px-4 text-white" style={{ width: 'min(92vw, 24rem)' }}>
+      <div className="lg:hidden absolute left-1/2 top-0 z-50 -translate-x-1/2 rounded-b-[24px] bg-nav px-5 text-white" style={{ width: 'min(92vw, 24rem)' }}>
         <Wing kind="left" />
         <Wing kind="right" />
-        <div className="flex h-10 items-center justify-between gap-2">
+        <div className="flex h-12 items-center justify-between gap-2">
           <a href="#top" onClick={(e) => { e.preventDefault(); setDrawer(false); onHome(); }} aria-label="CivisMetric, back to top" className="flex shrink-0 items-center">{logoMark}</a>
-          <button type="button" aria-expanded={drawer} aria-label="Toggle navigation menu" onClick={() => setDrawer(!drawer)} className="flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-sm font-semibold hover:bg-white/10">
+          <button type="button" aria-expanded={drawer} aria-label="Toggle navigation menu" onClick={() => setDrawer(!drawer)} style={{ minHeight: 0 }} className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-sm font-semibold hover:bg-white/10">
             <span className="truncate">{activeLabel}</span>
             <Chevron open={drawer} />
           </button>
-          <button type="button" onClick={onSignIn} className="shrink-0 rounded-full bg-stripe px-3.5 py-1 text-sm font-semibold text-black hover:brightness-110">Sign in</button>
+          <button type="button" onClick={onSignIn} style={{ minHeight: 0 }} className="h-9 shrink-0 rounded-full bg-stripe px-4 text-sm font-semibold text-black hover:brightness-110">Sign in</button>
         </div>
         <div className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${drawer ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0'}`}>
           <div className="overflow-hidden">
