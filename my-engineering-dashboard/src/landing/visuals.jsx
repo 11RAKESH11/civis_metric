@@ -78,7 +78,7 @@ export function CadVisual() {
 
 export function BoqVisual() {
   return (
-    <Window title="Project BOQ · sample figures">
+    <Window title="Project BOQ">
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[420px]">
           <thead><tr className="bg-sunken text-left"><th className="px-3 py-2 font-semibold">Item</th><th className="px-2 py-2 font-semibold text-right">Qty</th><th className="px-2 py-2 font-semibold">Unit</th><th className="px-2 py-2 font-semibold text-right">Rate ₹</th><th className="px-3 py-2 font-semibold text-right">Amount ₹</th></tr></thead>
@@ -158,10 +158,10 @@ export function MaterialsVisual() {
 
 export function ReportVisual() {
   return (
-    <div className="rounded-lg bg-white text-black shadow-[0_24px_60px_rgb(0_0_0/0.35)] p-6 sm:p-8 text-sm" role="img" aria-label="Sample estimate report with project information, itemised quantities, rates, GST and total">
+    <div className="rounded-lg bg-white text-black shadow-[0_24px_60px_rgb(0_0_0/0.35)] p-6 sm:p-8 text-sm" role="img" aria-label="Estimate report with project information, itemised quantities, rates, GST and total">
       <div className="flex flex-col gap-1 border-b-2 border-nav pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div><p className="text-xs font-bold tracking-widest uppercase">Estimate report</p><p className="text-lg font-semibold">Sample project · RCC slab</p></div>
-        <p className="text-xs sm:text-right">Sample data<br />Concrete M20</p>
+        <div><p className="text-xs font-bold tracking-widest uppercase">Estimate report</p><p className="text-lg font-semibold">RCC slab</p></div>
+        <p className="text-xs sm:text-right">Concrete M20</p>
       </div>
       <table className="w-full mt-3">
         <thead><tr className="text-left text-xs uppercase tracking-wide border-b border-[#DEDBD5]"><th className="py-1.5">Item</th><th className="py-1.5 text-right">Qty</th><th className="py-1.5 text-right hidden sm:table-cell">Rate</th><th className="py-1.5 pl-3 text-right">Amount ₹</th></tr></thead>

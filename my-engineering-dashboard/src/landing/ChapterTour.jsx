@@ -88,7 +88,7 @@ export default function ChapterTour({ go }) {
                       </svg>
                     )}
                     {on && (
-                      <span aria-hidden="true" className="hero-rise absolute left-1/2 top-full z-0 h-4 w-7 -translate-x-1/2 bg-bg" style={{ animationDuration: '0.35s' }}>
+                      <span aria-hidden="true" className="hero-rise absolute inset-x-0 top-full z-0 mx-auto h-4 w-7 bg-bg" style={{ animationDuration: '0.35s' }}>
                         <Fillet side="left" />
                         <Fillet side="right" />
                       </span>
